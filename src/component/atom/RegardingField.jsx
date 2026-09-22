@@ -9,14 +9,15 @@ import {
 } from "@mui/material";
 import { getRegardingOptions } from "./helperFunc"; // Import the function
 
-const RegardingField = ({ formData, handleInputChange }) => {
-  const existingValue = formData.Regarding;
+const RegardingField = ({ formData, handleInputChange, picklistConfig = null }) => {
+  const existingValue = formData.Regarding || "";
   const predefinedOptions = getRegardingOptions(
     formData.Type_of_Activity,
-    existingValue
+    existingValue,
+    picklistConfig
   ); // Get dynamic options based on type
 
-  const [selectedValue, setSelectedValue] = useState(existingValue);
+  const [selectedValue, setSelectedValue] = useState(existingValue || "");
   const [manualInput, setManualInput] = useState("");
 
   useEffect(() => {
@@ -28,8 +29,8 @@ const RegardingField = ({ formData, handleInputChange }) => {
       setSelectedValue(existingValue);
       setManualInput("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- predefinedOptions derived from Type_of_Activity and existingValue
-  }, [formData.Type_of_Activity, existingValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- do not reset while manual text is being entered
+  }, [formData.Type_of_Activity, picklistConfig]);
 
   const handleSelectChange = (event) => {
     const value = event.target.value;
@@ -40,18 +41,15 @@ const RegardingField = ({ formData, handleInputChange }) => {
       handleInputChange("Regarding", value);
     } else {
       setManualInput(""); // Reset manual input when "Other" is selected
+      handleInputChange("Regarding", "");
     }
   };
 
   const handleManualInputChange = (event) => {
     const value = event.target.value;
     setManualInput(value);
-    
+    handleInputChange("Regarding", value);
   };
-
-  const handleBlur = () => {
-    handleInputChange("Regarding", manualInput);
-  }
 
   return (
     <Box sx={{ width: "100%" }}>
@@ -85,7 +83,6 @@ const RegardingField = ({ formData, handleInputChange }) => {
           size="small"
           value={manualInput}
           onChange={handleManualInputChange}
-          onBlur={handleBlur}
           sx={{
             mt: 2,
             fontSize: "9pt",

@@ -61,6 +61,7 @@ const EventForm = ({
   snackbarOpen,
   setSnackbarOpen,
   loggedInUser,
+  picklistConfig = null,
 }) => {
   const [value, setValue] = useState(0);
   const [edited, setEdited] = useState(false);
@@ -878,17 +879,20 @@ const EventForm = ({
   useEffect(() => {
     if (formData?.Type_of_Activity) {
       const filteredOptions = getResultBasedOnActivityType2(
-        formData.Type_of_Activity
+        formData.Type_of_Activity,
+        picklistConfig
       );
       setFilteredActivities(filteredOptions);
 
-      // Set the first option as the default if no result is already set
-      if (filteredOptions.length > 0 && !result) {
-        setResult(filteredOptions[0]);
-      }
+      // Keep a valid existing selection; otherwise use the configured default
+      // (the first option by Sort_Order).
+      setResult((currentResult) =>
+        currentResult && filteredOptions.includes(currentResult)
+          ? currentResult
+          : filteredOptions[0] || ""
+      );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- result intentionally not in deps
-  }, [formData?.Type_of_Activity]);
+  }, [formData?.Type_of_Activity, picklistConfig]);
 
   // Handle result selection change
   const handleResultChange = (e) => {
@@ -900,7 +904,12 @@ const EventForm = ({
     setClearChecked(event.target.checked);
     if (event.target.checked) {
       setEraseChecked(false);
-      setResult(getResultBasedOnActivityType(formData.Type_of_Activity) || "");
+      setResult(
+        getResultBasedOnActivityType(
+          formData.Type_of_Activity,
+          picklistConfig
+        ) || ""
+      );
     }
   };
 
@@ -909,9 +918,21 @@ const EventForm = ({
     setEraseChecked(event.target.checked);
     if (event.target.checked) {
       setClearChecked(false);
-      setResult(getResultBasedOnActivityType(formData.Type_of_Activity) || "");
+      setResult(
+        getResultBasedOnActivityType(
+          formData.Type_of_Activity,
+          picklistConfig
+        ) || ""
+      );
     }
   };
+
+  const displayedResultOptions =
+    result &&
+    existingHistory.length > 0 &&
+    !filteredActivities.includes(result)
+      ? [result, ...filteredActivities]
+      : filteredActivities;
 
   // Handle activity to history checkbox change
   const handleActivityToHistory = (e) => {
@@ -1065,6 +1086,7 @@ const EventForm = ({
             recentColor={recentColor}
             setRecentColor={setRecentColor}
             clickedEvent={clickedEvent}
+            picklistConfig={picklistConfig}
           />
           <Box display="flex" justifyContent="space-between" mt={2}>
             <Box>
@@ -1217,7 +1239,7 @@ const EventForm = ({
               <MenuItem value="" disabled>
                 <em>Select a result</em>
               </MenuItem>
-              {filteredActivities.map((option) => (
+              {displayedResultOptions.map((option) => (
                 <MenuItem key={option} value={option} sx={{ fontSize: "9pt" }}>
                   {option}
                 </MenuItem>

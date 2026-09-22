@@ -1,4 +1,19 @@
-export const getRegardingOptions = (type, existingValue) => {
+export const getRegardingOptions = (type, existingValue, config = null) => {
+    const configuredOptions =
+      config?.regarding?.[type] || config?.regarding?._default;
+    if (configuredOptions?.length) {
+      const options = [...configuredOptions];
+      const safeExistingValue =
+        typeof existingValue === "string" ? existingValue : "";
+      if (
+        safeExistingValue.trim() !== "" &&
+        !options.includes(safeExistingValue)
+      ) {
+        options.unshift(safeExistingValue);
+      }
+      return options;
+    }
+
     const options = {
       Call: [
         "2nd Followup", "3rd Followup", "4th Followup", "5th Followup",
@@ -28,8 +43,13 @@ export const getRegardingOptions = (type, existingValue) => {
     let predefinedOptions = options[type] || ["General"];
   
     // Only add existingValue if it's not empty and not already in the options
-    if (existingValue && existingValue.trim() !== "" && !predefinedOptions.includes(existingValue)) {
-      predefinedOptions = [existingValue, ...predefinedOptions];
+    const safeExistingValue =
+      typeof existingValue === "string" ? existingValue : "";
+    if (
+      safeExistingValue.trim() !== "" &&
+      !predefinedOptions.includes(safeExistingValue)
+    ) {
+      predefinedOptions = [safeExistingValue, ...predefinedOptions];
     }
   
     return predefinedOptions;

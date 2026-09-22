@@ -93,46 +93,6 @@ export const typeOptions = [
   "E-mail Attachment",
 ];
 
-
-export const getResultBasedOnActivityType = (activityType) => {
-  switch (activityType) {
-    case "Meeting":
-      return "Meeting Held";
-    case "To-Do":
-      return "To-do Done";
-    case "Appointment":
-      return "Appointment Completed";
-    case "Boardroom":
-      return "Boardroom - Completed";
-    case "Call Billing":
-      return "Call Billing - Completed";
-    case "Email Billing":
-      return "Email Billing - Completed";
-    case "Initial Consultation":
-      return "Initial Consultation - Completed";
-    case "Call":
-      return "Call Attempted";
-    case "Mail":
-      return "Mail - Completed";
-    case "Meeting Billing":
-      return "Meeting Billing - Completed";
-    case "Personal Activity":
-      return "Personal Activity - Completed";
-    case "Room 1":
-      return "Room 1 - Completed";
-    case "Room 2":
-      return "Room 2 - Completed";
-    case "Room 3":
-      return "Room 3 - Completed";
-    case "To Do Billing":
-      return "To Do Billing - Completed";
-    case "Vacation":
-      return "Vacation - Completed";
-    default:
-      return "Note"; // Default result if no specific type is matched
-  }
-};
-
 export const activityResultMapping = {
   "Call": ["Call Attempted", "Call Completed", "Call Left Message", "Call Received"],
   "Meeting": ["Meeting Held", "Meeting Not Held"],
@@ -156,12 +116,39 @@ export const activityResultMapping = {
   "Other": ["Attachment", "E-mail Attachment", "E-mail Auto Attached", "E-mail Sent"]
 };
 
-export const getResultBasedOnActivityType2 = (activityType) => {
-  return activityResultMapping[activityType] || ["Note"]; // Default to "Note" if no match
+export const durationOptions = Array.from(
+  { length: 24 },
+  (_, index) => (index + 1) * 10
+);
+
+export const getResultBasedOnActivityType2 = (activityType, config = null) => {
+  const configuredResults =
+    config?.results?.[activityType] || config?.results?._default;
+  if (configuredResults?.length) return configuredResults;
+  return activityResultMapping[activityType] || ["Note"];
+};
+
+export const getResultBasedOnActivityType = (activityType, config = null) => {
+  return getResultBasedOnActivityType2(activityType, config)[0] || "Note";
 };
 
 
-export const getRegardingOptions = (type, existingValue) => {
+export const getRegardingOptions = (type, existingValue, config = null) => {
+  const configuredOptions =
+    config?.regarding?.[type] || config?.regarding?._default;
+  if (configuredOptions?.length) {
+    const options = [...configuredOptions];
+    const safeExistingValue =
+      typeof existingValue === "string" ? existingValue : "";
+    if (
+      safeExistingValue.trim() !== "" &&
+      !options.includes(safeExistingValue)
+    ) {
+      options.unshift(safeExistingValue);
+    }
+    return options;
+  }
+
   const options = {
     Call: [
       "2nd Followup", "3rd Followup", "4th Followup", "5th Followup",
@@ -191,8 +178,13 @@ export const getRegardingOptions = (type, existingValue) => {
   let predefinedOptions = options[type] || ["General"];
 
   // Only add existingValue if it's not empty and not already in the options
-  if (existingValue && existingValue.trim() !== "" && !predefinedOptions.includes(existingValue)) {
-    predefinedOptions = [existingValue, ...predefinedOptions];
+  const safeExistingValue =
+    typeof existingValue === "string" ? existingValue : "";
+  if (
+    safeExistingValue.trim() !== "" &&
+    !predefinedOptions.includes(safeExistingValue)
+  ) {
+    predefinedOptions = [safeExistingValue, ...predefinedOptions];
   }
 
   return predefinedOptions;

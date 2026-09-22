@@ -25,6 +25,11 @@ import CustomColorPicker from "../atom/CustomColorPicker";
 import { LocalizationProvider } from "@mui/x-date-pickers";
 import { DesktopDateTimePicker } from '@mui/x-date-pickers/DesktopDateTimePicker';
 import TestContactField from "../atom/TestContactField";
+import {
+  durationOptions as fallbackDurationOptions,
+  getRegardingOptions,
+} from "../helperFunction";
+import { getDurationOptionsFromConfig } from "../../services/picklistConfigService";
 
 const FirstComponent = ({
   formData,
@@ -36,6 +41,7 @@ const FirstComponent = ({
   recentColor,
   setRecentColor,
   clickedEvent,
+  picklistConfig = null,
 }) => {
   dayjs.extend(utc);
   dayjs.extend(timezone);
@@ -73,7 +79,28 @@ const FirstComponent = ({
     { name: "1 day before", value: 1440 },
     { name: "2 day before", value: 2880 },
   ];
-  const durations = Array.from({ length: 24 }, (_, i) => (i + 1) * 10);
+  const configuredDurations = picklistConfig
+    ? getDurationOptionsFromConfig(picklistConfig)
+    : fallbackDurationOptions;
+  const durations = React.useMemo(() => {
+    const currentDuration = Number(formData.duration);
+    return currentDuration > 0 && !configuredDurations.includes(currentDuration)
+      ? [currentDuration, ...configuredDurations]
+      : configuredDurations;
+  }, [configuredDurations, formData.duration]);
+  const displayedActivityTypes = React.useMemo(() => {
+    const configuredTypes = Array.isArray(activityType) ? activityType : [];
+    const currentType = formData.Type_of_Activity;
+
+    if (currentType && !configuredTypes.some((item) => item.type === currentType)) {
+      return [
+        { type: currentType, resource: formData.resource ?? 0 },
+        ...configuredTypes,
+      ];
+    }
+
+    return configuredTypes;
+  }, [activityType, formData.Type_of_Activity, formData.resource]);
 
   function addMinutesToDateTime(formatType, durationInMinutes) {
     const startTime = dayjs(formData.start);
@@ -103,7 +130,7 @@ const FirstComponent = ({
 
   const handleActivityChange = (event) => {
     const selectedType = event.target.value;
-    const selectedActivity = activityType.find(
+    const selectedActivity = displayedActivityTypes.find(
       (item) => item.type === selectedType
     );
 
@@ -111,6 +138,12 @@ const FirstComponent = ({
       // Update both the activity type and the resource
       handleInputChange("Type_of_Activity", selectedActivity.type);
       handleInputChange("resource", selectedActivity.resource);
+      const regardingOptions = getRegardingOptions(
+        selectedActivity.type,
+        undefined,
+        picklistConfig
+      );
+      handleInputChange("Regarding", regardingOptions[0] || "");
     }
   };
 
@@ -277,7 +310,7 @@ const FirstComponent = ({
                 },
               }}
             >
-              {activityType.map((item, index) => (
+              {displayedActivityTypes.map((item, index) => (
                 <MenuItem
                   value={item.type}
                   key={index}
@@ -677,6 +710,7 @@ const FirstComponent = ({
           <RegardingField
             formData={formData}
             handleInputChange={handleInputChange}
+            picklistConfig={picklistConfig}
           />
         </Grid>
 

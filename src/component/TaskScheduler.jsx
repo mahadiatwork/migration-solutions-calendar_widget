@@ -36,6 +36,7 @@ import timezone from "dayjs/plugin/timezone";
 import BeachAccessIcon from "@mui/icons-material/BeachAccess";
 import DrawerComponent from "./DrawerComponent";
 import { activityType as activityTypeMapping } from "./helperFunction";
+import { getTypeOptionsFromConfig } from "../services/picklistConfigService";
 
 momentTimezone.moment = moment;
 dayjs.extend(utc);
@@ -95,6 +96,7 @@ const TaskScheduler = ({
   filterSaveInProgress = false,
   onFilterUpdateSuccess,
   onFilterUpdateError,
+  picklistConfig = null,
 }) => {
   const [activityType, setActivityType] = useState(activityTypeMapping);
   const [selectedDate, setSelectedDate] = useState(
@@ -158,6 +160,45 @@ const TaskScheduler = ({
     Event_Status: newEvent?.Event_Status,
   });
   const timer = useRef(null);
+
+  useEffect(() => {
+    const configuredTypes = getTypeOptionsFromConfig(picklistConfig);
+    setActivityType(
+      configuredTypes.map((type, index) => {
+        const matchingFallback = activityTypeMapping.find(
+          (item) => item.type === type
+        );
+        const positionalFallback = activityTypeMapping[index];
+        const configuredResource = picklistConfig?.typeResources?.[type];
+        return {
+          type,
+          // Sort_Order in the seeded config follows the legacy resource order.
+          // Name matching handles unchanged values; Sort_Order preserves the
+          // numeric resource when an administrator renames a Type.
+          resource:
+            matchingFallback?.resource ??
+            configuredResource ??
+            positionalFallback?.resource ??
+            index + 1,
+        };
+      })
+    );
+  }, [picklistConfig]);
+
+  const filterActivityTypes = useMemo(() => {
+    const mergedTypes = [...activityType];
+    const knownTypes = new Set(mergedTypes.map((item) => item.type));
+
+    myEvents.forEach((event) => {
+      const type = event?.Type_of_Activity;
+      if (type && !knownTypes.has(type)) {
+        knownTypes.add(type);
+        mergedTypes.push({ type, resource: event?.resource ?? 0 });
+      }
+    });
+
+    return mergedTypes;
+  }, [activityType, myEvents]);
 
   useEffect(() => {
     let filtered = myEvents;
@@ -732,7 +773,7 @@ const TaskScheduler = ({
       const eventTypeLower = typeof eventType === 'string' ? eventType.toLowerCase().trim() : '';
       
       if (eventTypeLower) {
-        const foundActivity = activityTypeMapping.find((a) => 
+        const foundActivity = activityType.find((a) =>
           a.type.toLowerCase() === eventTypeLower
         );
         
@@ -1268,6 +1309,7 @@ const TaskScheduler = ({
             onUpdateSavedFilter={updateSavedFilter}
             onDeleteSavedFilter={deleteSavedFilter}
             filterSaveInProgress={filterSaveInProgress}
+            activityTypes={filterActivityTypes}
           />
 
           <Dialog
@@ -1298,6 +1340,7 @@ const TaskScheduler = ({
                 snackbarOpen={snackbarOpen}
                 setSnackbarOpen={setSnackbarOpen}
                 loggedInUser={loggedInUser}
+                picklistConfig={picklistConfig}
               />
             </DialogContent>
           </Dialog>

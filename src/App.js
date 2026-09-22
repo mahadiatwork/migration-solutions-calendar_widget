@@ -10,6 +10,7 @@ import {
   persistLatestFilterToUserPreferences,
   saveFiltersToUserPreferences,
 } from "./helpers/userPreferencesFilters";
+import { fetchPicklistConfig } from "./services/picklistConfigService";
 const ZOHO = window.ZOHO;
 
 dayjs.extend(utc);
@@ -38,6 +39,7 @@ function App() {
   const [filterSnackbarSeverity, setFilterSnackbarSeverity] = useState(
     "success"
   );
+  const [picklistConfig, setPicklistConfig] = useState(null);
 
   // Persist saved filters to User_Preferences module (Preference_Of = user, Saved_Filters = value, Name = "username - Preference").
   const persistSavedFilters = useCallback(
@@ -287,12 +289,29 @@ function App() {
   }, [zohoLoaded]);
 
   useEffect(() => {
+    if (!zohoLoaded) return undefined;
+
+    let cancelled = false;
+    fetchPicklistConfig()
+      .then((config) => {
+        if (!cancelled) setPicklistConfig(config);
+      })
+      .catch((error) => {
+        console.warn("Failed to load Widget_Picklist_Config:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [zohoLoaded]);
+
+  useEffect(() => {
     if (zohoLoaded) {
       searchDataByDate();
     }
   }, [zohoLoaded, searchDataByDate]);
 
-  if (loggedInUser === null) {
+  if (loggedInUser === null || picklistConfig === null) {
     return (
       <Box
         sx={{
@@ -331,6 +350,7 @@ function App() {
         filterSaveInProgress={filterSaveInProgress}
         onFilterUpdateSuccess={showFilterUpdateSuccessSnackbar}
         onFilterUpdateError={showFilterUpdateErrorSnackbar}
+        picklistConfig={picklistConfig}
       />
       <Snackbar
         open={filterSaveSnackbarOpen}

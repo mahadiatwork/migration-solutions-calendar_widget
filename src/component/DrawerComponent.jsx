@@ -26,6 +26,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
+import { activityType as fallbackActivityTypes } from "./helperFunction";
 
 const DrawerComponent = ({
   open,
@@ -46,6 +47,7 @@ const DrawerComponent = ({
   onUpdateSavedFilter,
   onDeleteSavedFilter,
   filterSaveInProgress = false,
+  activityTypes = [],
 }) => {
   const [saveFilterName, setSaveFilterName] = useState("");
   const [editIndex, setEditIndex] = useState(null);
@@ -107,24 +109,9 @@ const DrawerComponent = ({
     },
   };
   const priority = ["Low", "Medium", "High"];
-  const activityType = [
-    { type: "Meeting", resource: 1 },
-    { type: "To-Do", resource: 2 },
-    { type: "Appointment", resource: 3 },
-    { type: "Boardroom", resource: 4 },
-    { type: "Call Billing", resource: 5 },
-    { type: "Email Billing", resource: 6 },
-    { type: "Initial Consultation", resource: 7 },
-    { type: "Call", resource: 8 },
-    { type: "Mail", resource: 9 },
-    { type: "Meeting Billing", resource: 10 },
-    { type: "Personal Activity", resource: 11 },
-    { type: "Room 1", resource: 12 },
-    { type: "Room 2", resource: 13 },
-    { type: "Room 3", resource: 14 },
-    { type: "To Do Billing", resource: 15 },
-    { type: "Vacation", resource: 16 },
-  ];
+  const activityType = activityTypes.length
+    ? activityTypes
+    : fallbackActivityTypes;
 
   const handleChange = (event) => {
     const {

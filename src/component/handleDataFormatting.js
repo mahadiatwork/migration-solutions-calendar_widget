@@ -91,7 +91,10 @@ export function transformFormSubmission(data, individualParticipant = null) {
   }
 
   const resourceValue = getResourceByType(data.Type_of_Activity);
-  transformedData.resource = resourceValue;
+  // Configured Type labels can be renamed. In that case the legacy name map
+  // no longer matches, so retain the resource resolved by the form's ordered
+  // config options instead of dropping it from the payload.
+  transformedData.resource = resourceValue ?? data.resource ?? null;
 
   const startTime = dayjs(data.start).tz(localTimezone);
 
