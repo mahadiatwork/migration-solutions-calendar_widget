@@ -122,21 +122,33 @@ export const durationOptions = Array.from(
 );
 
 export const getResultBasedOnActivityType2 = (activityType, config = null) => {
-  const configuredResults =
-    config?.results?.[activityType] || config?.results?._default;
-  if (configuredResults?.length) return configuredResults;
+  if (config?._source === "custom_module") {
+    const results = config.results || {};
+    if (Object.prototype.hasOwnProperty.call(results, activityType)) {
+      return Array.isArray(results[activityType]) ? results[activityType] : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(results, "_default")) {
+      return Array.isArray(results._default) ? results._default : [];
+    }
+    return [];
+  }
   return activityResultMapping[activityType] || ["Note"];
 };
 
 export const getResultBasedOnActivityType = (activityType, config = null) => {
-  return getResultBasedOnActivityType2(activityType, config)[0] || "Note";
+  const configuredDefault = getResultBasedOnActivityType2(activityType, config)[0];
+  return configuredDefault || (config?._source === "custom_module" ? "" : "Note");
 };
 
 
 export const getRegardingOptions = (type, existingValue, config = null) => {
-  const configuredOptions =
-    config?.regarding?.[type] || config?.regarding?._default;
-  if (configuredOptions?.length) {
+  if (config?._source === "custom_module") {
+    const regarding = config.regarding || {};
+    const configuredOptions = Object.prototype.hasOwnProperty.call(regarding, type)
+      ? (Array.isArray(regarding[type]) ? regarding[type] : [])
+      : Object.prototype.hasOwnProperty.call(regarding, "_default")
+        ? (Array.isArray(regarding._default) ? regarding._default : [])
+        : [];
     const options = [...configuredOptions];
     const safeExistingValue =
       typeof existingValue === "string" ? existingValue : "";

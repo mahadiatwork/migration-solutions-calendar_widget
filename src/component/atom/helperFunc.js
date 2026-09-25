@@ -1,7 +1,11 @@
 export const getRegardingOptions = (type, existingValue, config = null) => {
-    const configuredOptions =
-      config?.regarding?.[type] || config?.regarding?._default;
-    if (configuredOptions?.length) {
+    if (config?._source === "custom_module") {
+      const regarding = config.regarding || {};
+      const configuredOptions = Object.prototype.hasOwnProperty.call(regarding, type)
+        ? (Array.isArray(regarding[type]) ? regarding[type] : [])
+        : Object.prototype.hasOwnProperty.call(regarding, "_default")
+          ? (Array.isArray(regarding._default) ? regarding._default : [])
+          : [];
       const options = [...configuredOptions];
       const safeExistingValue =
         typeof existingValue === "string" ? existingValue : "";
@@ -54,3 +58,6 @@ export const getRegardingOptions = (type, existingValue, config = null) => {
   
     return predefinedOptions;
   };
+
+export const shouldOfferManualOther = (config, configuredOptions = []) =>
+  config?._source !== "custom_module" || configuredOptions.includes("Other");

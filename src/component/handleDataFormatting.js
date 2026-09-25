@@ -31,6 +31,8 @@ function getResourceByType(type) {
 
 export function transformFormSubmission(data, individualParticipant = null) {
   const localTimezone = dayjs.tz.guess();
+  const durationValue = data.Duration_Min ?? data.duration;
+  const hasDuration = durationValue !== "" && durationValue != null;
 
   const transformScheduleWithToParticipants = (scheduleWith) => {
     return scheduleWith.map((contact) => ({
@@ -78,11 +80,12 @@ export function transformFormSubmission(data, individualParticipant = null) {
     $send_notification: data?.send_notification,
     se_module: "Accounts",
     Participants: participants,
-    Duration_Min: data.duration.toString(),
+    ...(hasDuration ? { Duration_Min: String(durationValue) } : {}),
     Venue: data.location,
     Colour: data.color,
     Send_Reminders: data.Send_Reminders
   };
+  if (!hasDuration) delete transformedData.Duration_Min;
 
   if (data.associateWith?.id) {
     transformedData.What_Id = {

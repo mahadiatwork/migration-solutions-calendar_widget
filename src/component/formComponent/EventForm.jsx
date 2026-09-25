@@ -37,6 +37,7 @@ import {
   getResultBasedOnActivityType,
   getResultBasedOnActivityType2,
 } from "../helperFunction";
+import { getDurationOptionsFromConfig } from "../../services/picklistConfigService";
 
 const ZOHO = window.ZOHO;
 
@@ -100,12 +101,17 @@ const EventForm = ({
   };
 
   const handleClose = () => {
+    setExistingHistory([]);
+    setResult("");
+    setFilteredActivities([]);
+    setActivityDetails("");
+    setAddActivityToHistory(true);
     setFormData({
       id: "",
       title: "",
       startTime: "",
       endTime: "",
-      duration: 0,
+      duration: getDurationOptionsFromConfig(picklistConfig)[0] ?? "",
       associateWith: null,
       Type_of_Activity: "",
       resource: 0,
@@ -130,6 +136,12 @@ const EventForm = ({
 
   // Check for existing history only when Clear tab is active
   useEffect(() => {
+    let cancelled = false;
+    setExistingHistory([]);
+    setResult("");
+    setActivityDetails(formData.Description?.trim() || "");
+    setAddActivityToHistory(true);
+
     if (formData.id && value === 3) {
       // Fetch existing history for this event
       const fetchHistory = async () => {
@@ -139,6 +151,8 @@ const EventForm = ({
             Type: "criteria",
             Query: `(Event_ID:equals:${formData.id})`,
           });
+
+          if (cancelled) return;
 
           if (
             historyResponse &&
@@ -155,6 +169,8 @@ const EventForm = ({
               setResult(historyResponse.data[0].History_Result);
             }
           } else {
+            setExistingHistory([]);
+            setResult("");
             // Default to checked for "Add Activity Details to History" when clearing activity
             setAddActivityToHistory(true);
             if (formData.Description && formData.Description.trim() !== "") {
@@ -162,13 +178,19 @@ const EventForm = ({
             }
           }
         } catch (error) {
+          if (cancelled) return;
+          setExistingHistory([]);
+          setResult("");
           console.error("Error fetching history:", error);
         }
       };
 
       fetchHistory();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Description sync intentional
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset/fetch is keyed to the active record and tab
   }, [formData.id, value]);
 
   const logResponse = async ({
@@ -792,12 +814,17 @@ const EventForm = ({
 
   // Optional helper
   const resetFormState = () => {
+    setExistingHistory([]);
+    setResult("");
+    setFilteredActivities([]);
+    setActivityDetails("");
+    setAddActivityToHistory(true);
     setFormData({
       id: "",
       title: "",
       startTime: "",
       endTime: "",
-      duration: 0,
+      duration: getDurationOptionsFromConfig(picklistConfig)[0] ?? "",
       associateWith: null,
       Type_of_Activity: "",
       resource: 0,
@@ -887,12 +914,13 @@ const EventForm = ({
       // Keep a valid existing selection; otherwise use the configured default
       // (the first option by Sort_Order).
       setResult((currentResult) =>
-        currentResult && filteredOptions.includes(currentResult)
+        currentResult &&
+        (filteredOptions.includes(currentResult) || existingHistory.length > 0)
           ? currentResult
           : filteredOptions[0] || ""
       );
     }
-  }, [formData?.Type_of_Activity, picklistConfig]);
+  }, [formData?.id, formData?.Type_of_Activity, picklistConfig, existingHistory.length, value]);
 
   // Handle result selection change
   const handleResultChange = (e) => {

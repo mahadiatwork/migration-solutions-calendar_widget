@@ -48,6 +48,7 @@ const DrawerComponent = ({
   onDeleteSavedFilter,
   filterSaveInProgress = false,
   activityTypes = [],
+  allowActivityTypeFallback = true,
 }) => {
   const [saveFilterName, setSaveFilterName] = useState("");
   const [editIndex, setEditIndex] = useState(null);
@@ -111,7 +112,9 @@ const DrawerComponent = ({
   const priority = ["Low", "Medium", "High"];
   const activityType = activityTypes.length
     ? activityTypes
-    : fallbackActivityTypes;
+    : allowActivityTypeFallback
+      ? fallbackActivityTypes
+      : [];
 
   const handleChange = (event) => {
     const {

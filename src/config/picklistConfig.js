@@ -11,10 +11,10 @@ export const PICKLIST_CONFIG_FIELDS = {
 };
 
 export const PICKLIST_CATEGORIES = {
-  TYPE: "Type",
-  RESULT: "Result",
-  REGARDING: "Regarding",
-  DURATION: "Duration",
+  TYPE: ["Type", "History Type"],
+  RESULT: ["Result", "History Result"],
+  REGARDING: ["Regarding"],
+  DURATION: ["Duration"],
 };
 
 export const ZOHO_API_BASE_URL = "https://www.zohoapis.com.au";

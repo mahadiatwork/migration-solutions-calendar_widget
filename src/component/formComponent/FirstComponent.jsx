@@ -58,6 +58,7 @@ const FirstComponent = ({
     formData.Event_Status === "Open" || false
   );
   const [sendReminders, setSendReminders] = useState(formData?.Send_Reminders); // Initially, reminders are enabled
+  const isEditMode = Boolean(clickedEvent?.id || formData.id);
 
   // Sync state values with formData when it changes (e.g., when opening a different event)
   React.useEffect(() => {
@@ -83,16 +84,26 @@ const FirstComponent = ({
     ? getDurationOptionsFromConfig(picklistConfig)
     : fallbackDurationOptions;
   const durations = React.useMemo(() => {
-    const currentDuration = Number(formData.duration);
-    return currentDuration > 0 && !configuredDurations.includes(currentDuration)
+    const rawDuration = formData.duration;
+    const currentDuration =
+      rawDuration === null || rawDuration === undefined || rawDuration === ""
+        ? Number.NaN
+        : Number(rawDuration);
+    return isEditMode &&
+      Number.isFinite(currentDuration) &&
+      !configuredDurations.includes(currentDuration)
       ? [currentDuration, ...configuredDurations]
       : configuredDurations;
-  }, [configuredDurations, formData.duration]);
+  }, [configuredDurations, formData.duration, isEditMode]);
   const displayedActivityTypes = React.useMemo(() => {
     const configuredTypes = Array.isArray(activityType) ? activityType : [];
     const currentType = formData.Type_of_Activity;
 
-    if (currentType && !configuredTypes.some((item) => item.type === currentType)) {
+    if (
+      isEditMode &&
+      currentType &&
+      !configuredTypes.some((item) => item.type === currentType)
+    ) {
       return [
         { type: currentType, resource: formData.resource ?? 0 },
         ...configuredTypes,
@@ -100,7 +111,7 @@ const FirstComponent = ({
     }
 
     return configuredTypes;
-  }, [activityType, formData.Type_of_Activity, formData.resource]);
+  }, [activityType, formData.Type_of_Activity, formData.resource, isEditMode]);
 
   function addMinutesToDateTime(formatType, durationInMinutes) {
     const startTime = dayjs(formData.start);
@@ -188,11 +199,27 @@ const FirstComponent = ({
   }
 
   const handleEndDateChange = (e) => {
+    const requestedDuration = getTimeDifference(e.$d);
+    if (picklistConfig?._source === "custom_module") {
+      if (durations.length === 0) return;
+
+      const nextDuration = durations.reduce((closest, candidate) =>
+        Math.abs(candidate - requestedDuration) <
+        Math.abs(closest - requestedDuration)
+          ? candidate
+          : closest
+      );
+      const normalizedEnd = dayjs(formData.start)
+        .add(nextDuration, "minute")
+        .toDate();
+      handleInputChange("end", normalizedEnd);
+      handleInputChange("duration", nextDuration);
+      setEndValue(dayjs(normalizedEnd));
+      return;
+    }
+
     handleInputChange("end", e.$d);
-    console.log("end", e.value);
-    const getDiffInMinutes = getTimeDifference(e.$d);
-    handleInputChange("duration", getDiffInMinutes);
-    console.log({ getDiffInMinutes });
+    handleInputChange("duration", requestedDuration);
     // if (formData.end ) {
     //   console.log('hello')
     // }
@@ -333,11 +360,20 @@ const FirstComponent = ({
               disabled={formData.Banner ? true : false}
               // slotProps={{ textField: { size: "small" } }}
               onChange={(e) => {
-                const addedHour = new Date(dayjs(e.$d).add(1, "hour").toDate());
+                const configuredDefault = durations[0];
+                const durationMinutes =
+                  picklistConfig?._source === "custom_module"
+                    ? configuredDefault
+                    : 60;
+                const addedHour = new Date(
+                  dayjs(e.$d)
+                    .add(durationMinutes ?? 0, "minute")
+                    .toDate()
+                );
                 handleInputChange("start", e.$d);
                 handleInputChange("end", addedHour);
                 setEndValue(dayjs(addedHour));
-                handleInputChange("duration", 60);
+                handleInputChange("duration", durationMinutes ?? "");
                 console.log(e.$d);
                 console.log(addedHour);
               }}
@@ -711,6 +747,7 @@ const FirstComponent = ({
             formData={formData}
             handleInputChange={handleInputChange}
             picklistConfig={picklistConfig}
+            isEditMode={isEditMode}
           />
         </Grid>
 

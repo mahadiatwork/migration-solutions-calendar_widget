@@ -36,7 +36,10 @@ import timezone from "dayjs/plugin/timezone";
 import BeachAccessIcon from "@mui/icons-material/BeachAccess";
 import DrawerComponent from "./DrawerComponent";
 import { activityType as activityTypeMapping } from "./helperFunction";
-import { getTypeOptionsFromConfig } from "../services/picklistConfigService";
+import {
+  getDurationOptionsFromConfig,
+  getTypeOptionsFromConfig,
+} from "../services/picklistConfigService";
 
 momentTimezone.moment = moment;
 dayjs.extend(utc);
@@ -131,12 +134,22 @@ const TaskScheduler = ({
   const [tooltipAnchor, setTooltipAnchor] = useState(null);
   const [hoverInEvents, setHoverInEvents] = useState();
   const newEvent = clickedEvent?.event;
+  const defaultConfiguredDuration =
+    getDurationOptionsFromConfig(picklistConfig)[0] ?? "";
+  const rawNewEventDuration = newEvent?.duration;
+  const parsedNewEventDuration = Number.parseInt(rawNewEventDuration, 10);
   const [formData, setFormData] = useState({
     id: newEvent?.id || "",
     title: newEvent?.title || "New Meeting",
     startTime: "",
     endTime: "",
-    duration: parseInt(newEvent?.duration) || 0,
+    duration:
+      rawNewEventDuration === null ||
+      rawNewEventDuration === undefined ||
+      rawNewEventDuration === "" ||
+      !Number.isFinite(parsedNewEventDuration)
+        ? defaultConfiguredDuration
+        : parsedNewEventDuration,
     associateWith: newEvent?.associateWith || null,
     Type_of_Activity: newEvent?.Type_of_Activity?.toLowerCase() || "",
     resource: newEvent?.resource || 0,
@@ -187,6 +200,8 @@ const TaskScheduler = ({
 
   const filterActivityTypes = useMemo(() => {
     const mergedTypes = [...activityType];
+    if (picklistConfig?._source === "custom_module") return mergedTypes;
+
     const knownTypes = new Set(mergedTypes.map((item) => item.type));
 
     myEvents.forEach((event) => {
@@ -198,7 +213,7 @@ const TaskScheduler = ({
     });
 
     return mergedTypes;
-  }, [activityType, myEvents]);
+  }, [activityType, myEvents, picklistConfig]);
 
   useEffect(() => {
     let filtered = myEvents;
@@ -596,13 +611,17 @@ const TaskScheduler = ({
 
   const handleCellDoubleClick = (args) => {
     console.log(args);
+    const initialDuration =
+      picklistConfig?._source === "custom_module"
+        ? getDurationOptionsFromConfig(picklistConfig)[0] ?? ""
+        : 60;
     handleInputChange("start", args.date);
     handleInputChange("title", "new meeting");
     handleInputChange(
       "end",
-      new Date(dayjs(args.date).add(1, "hour").toDate())
+      new Date(dayjs(args.date).add(initialDuration || 0, "minute").toDate())
     );
-    handleInputChange("duration", 60);
+    handleInputChange("duration", initialDuration);
     handleInputChange("priority", "medium");
     let date = new Date(args.date);
 
@@ -737,7 +756,8 @@ const TaskScheduler = ({
       title: "",
       startTime: "",
       endTime: "",
-      duration: 0,
+      duration:
+        getDurationOptionsFromConfig(picklistConfig)[0] ?? "",
       associateWith: null,
       Type_of_Activity: "",
       resource: 0,
@@ -803,12 +823,21 @@ const TaskScheduler = ({
       }
     }
 
+    const rawEventDuration = args?.event?.duration;
+    const parsedEventDuration = Number.parseInt(rawEventDuration, 10);
+
     setFormData({
       id: args?.event?.id,
       title: args?.event?.title,
       startTime: "",
       endTime: "",
-      duration: parseInt(args?.event?.duration) || 0,
+      duration:
+        rawEventDuration === null ||
+        rawEventDuration === undefined ||
+        rawEventDuration === "" ||
+        !Number.isFinite(parsedEventDuration)
+          ? ""
+          : parsedEventDuration,
       associateWith: args?.event?.associateWith,
       Type_of_Activity: eventType,
       resource: mappedResource,
@@ -1310,6 +1339,9 @@ const TaskScheduler = ({
             onDeleteSavedFilter={deleteSavedFilter}
             filterSaveInProgress={filterSaveInProgress}
             activityTypes={filterActivityTypes}
+            allowActivityTypeFallback={
+              picklistConfig?._source !== "custom_module"
+            }
           />
 
           <Dialog
