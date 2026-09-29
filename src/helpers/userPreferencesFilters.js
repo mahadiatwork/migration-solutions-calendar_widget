@@ -1,11 +1,7 @@
 /**
- * Load and save saved filters in the User_Preferences module.
- * One record per user: Preference_Of = user, Saved_Filters = JSON array string.
- * Search by user first; if record exists update it, else create one.
- *
- * If updates do not persist to CRM, verify in Zoho that the module's API name
- * is exactly "User_Preferences" (Setup > Customization > Modules > [your module] > API Name).
- * Some orgs use a generated name like "CustomModule6"; if so, set MODULE to that API name.
+ * Load and save Calendar filters in the User_Preferences module.
+ * Calendar and All Activity use separate records for each user, distinguished
+ * by Name, so neither widget reads or overwrites the other's filters.
  */
 
 const ZOHO = typeof window !== "undefined" ? window.ZOHO : null;
@@ -14,6 +10,8 @@ const FIELD_USER = "Preference_Of";
 const FIELD_SAVED_FILTERS = "Saved_Filters";
 const FIELD_LATEST_FILTER = "Latest_Filter";
 const FIELD_NAME = "Name";
+const CALENDAR_RECORD_NAME = "Calendar Preference";
+const ALL_ACTIVITY_RECORD_NAME = "All Activity Preference";
 
 const EMPTY_LATEST_FILTER = {
   priorityFilter: [],
@@ -21,8 +19,91 @@ const EMPTY_LATEST_FILTER = {
   userFilter: [],
 };
 
+function getRecords(response) {
+  const records = response?.data ?? response?.details ?? [];
+  return Array.isArray(records) ? records : [];
+}
+
+function getRecordId(record) {
+  return record?.id ?? record?.Id ?? record?.record_id;
+}
+
+function findCalendarRecord(records) {
+  return records.find(
+    (record) => record?.[FIELD_NAME] === CALENDAR_RECORD_NAME
+  );
+}
+
+function findLegacyRecord(records) {
+  return records.find((record) => {
+    const name = record?.[FIELD_NAME];
+    return (
+      typeof name === "string" &&
+      name !== CALENDAR_RECORD_NAME &&
+      name !== ALL_ACTIVITY_RECORD_NAME &&
+      (name === "User - Preference" || name.endsWith(" - Preference"))
+    );
+  });
+}
+
+function parseCalendarSavedFilters(record) {
+  try {
+    const raw = record?.[FIELD_SAVED_FILTERS];
+    const filters = raw ? JSON.parse(raw) : [];
+    return Array.isArray(filters)
+      ? filters.filter((filter) => filter && !filter.widget)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeLatestFilter(value) {
+  const filter =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    priorityFilter: Array.isArray(filter.priorityFilter)
+      ? filter.priorityFilter
+      : [],
+    activityTypeFilter: Array.isArray(filter.activityTypeFilter)
+      ? filter.activityTypeFilter
+      : [],
+    userFilter: Array.isArray(filter.userFilter) ? filter.userFilter : [],
+  };
+}
+
+function parseCalendarLatestFilter(record) {
+  try {
+    const raw = record?.[FIELD_LATEST_FILTER];
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return normalizeLatestFilter(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function parseSavedFiltersValue(value) {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  return Array.isArray(parsed)
+    ? parsed.filter((filter) => filter && !filter.widget)
+    : [];
+}
+
+function searchUserPreferences(userId) {
+  return ZOHO.CRM.API.searchRecord({
+    Entity: MODULE,
+    Type: "criteria",
+    Query: `(${FIELD_USER}:equals:${userId})`,
+  });
+}
+
 /**
- * Load saved filters and latest filter for the current user from User_Preferences (one search).
+ * Load saved and latest Calendar filters for a user. Dedicated Calendar data
+ * wins; the former shared row is a read-only fallback during migration.
  * @param {string} userId - Current user id (e.g. loggedInUser.id)
  * @returns {Promise<{ savedFilters: Array, latestFilter: object | null }>}
  */
@@ -33,50 +114,24 @@ export function loadUserPreferences(userId) {
       latestFilter: null,
     });
   }
-  return ZOHO.CRM.API.searchRecord({
-    Entity: MODULE,
-    Type: "criteria",
-    Query: `(${FIELD_USER}:equals:${userId})`,
-  })
+  return searchUserPreferences(userId)
     .then((response) => {
-      const records = response?.data ?? response?.details ?? [];
-      if (records.length === 0) {
+      const records = getRecords(response);
+      const record =
+        findCalendarRecord(records) ?? findLegacyRecord(records);
+      if (!record) {
         return { savedFilters: [], latestFilter: null };
       }
-      const record = records[0];
-      let savedFilters = [];
-      try {
-        const raw = record[FIELD_SAVED_FILTERS];
-        const arr = raw ? JSON.parse(raw) : [];
-        savedFilters = Array.isArray(arr) ? arr : [];
-      } catch {
-        savedFilters = [];
-      }
-      let latestFilter = null;
-      try {
-        const raw = record[FIELD_LATEST_FILTER];
-        const obj = raw ? JSON.parse(raw) : null;
-        if (obj && typeof obj === "object") {
-          latestFilter = {
-            priorityFilter: Array.isArray(obj.priorityFilter)
-              ? obj.priorityFilter
-              : [],
-            activityTypeFilter: Array.isArray(obj.activityTypeFilter)
-              ? obj.activityTypeFilter
-              : [],
-            userFilter: Array.isArray(obj.userFilter) ? obj.userFilter : [],
-          };
-        }
-      } catch {
-        latestFilter = null;
-      }
-      return { savedFilters, latestFilter };
+      return {
+        savedFilters: parseCalendarSavedFilters(record),
+        latestFilter: parseCalendarLatestFilter(record),
+      };
     })
     .catch(() => ({ savedFilters: [], latestFilter: null }));
 }
 
 /**
- * Load saved filters for the current user from User_Preferences.
+ * Load saved Calendar filters for the current user.
  * @param {string} userId - Current user id (e.g. loggedInUser.id)
  * @returns {Promise<Array>} Resolves to the array of saved filters (or [] on error/empty).
  */
@@ -85,8 +140,8 @@ export function loadSavedFiltersFromUserPreferences(userId) {
 }
 
 /**
- * Persist the latest applied filter to the user's User_Preferences record.
- * If no record exists, does nothing (latest filter is only persisted once the user has a record).
+ * Persist the latest Calendar filter to the dedicated Calendar record. When
+ * migrating, copy Calendar presets from the old shared record into the new row.
  * @param {string} userId - Current user id
  * @param {object} value - { priorityFilter, activityTypeFilter, userFilter }
  * @returns {Promise<void>}
@@ -95,23 +150,36 @@ export function persistLatestFilterToUserPreferences(userId, value) {
   if (!ZOHO?.CRM?.API || !userId) {
     return Promise.resolve();
   }
-  const valueStr =
-    typeof value === "string" ? value : JSON.stringify(value || EMPTY_LATEST_FILTER);
-  return ZOHO.CRM.API.searchRecord({
-    Entity: MODULE,
-    Type: "criteria",
-    Query: `(${FIELD_USER}:equals:${userId})`,
-  }).then((response) => {
-    const records = response?.data ?? response?.details ?? [];
-    if (records.length === 0) return;
-    const first = records[0];
-    const recordId = first?.id ?? first?.Id ?? first?.record_id;
-    if (!recordId) return;
-    return ZOHO.CRM.API.updateRecord({
+  const parsedValue = typeof value === "string" ? JSON.parse(value) : value;
+  const valueStr = JSON.stringify(
+    normalizeLatestFilter(parsedValue || EMPTY_LATEST_FILTER)
+  );
+
+  return searchUserPreferences(userId).then((response) => {
+    const records = getRecords(response);
+    const calendarRecord = findCalendarRecord(records);
+    if (calendarRecord) {
+      const recordId = getRecordId(calendarRecord);
+      if (!recordId) return;
+      return ZOHO.CRM.API.updateRecord({
+        Entity: MODULE,
+        RecordID: String(recordId),
+        APIData: {
+          id: String(recordId),
+          [FIELD_LATEST_FILTER]: valueStr,
+        },
+      });
+    }
+
+    const legacyRecord = findLegacyRecord(records);
+    return ZOHO.CRM.API.insertRecord({
       Entity: MODULE,
-      RecordID: String(recordId),
       APIData: {
-        id: String(recordId),
+        [FIELD_NAME]: CALENDAR_RECORD_NAME,
+        [FIELD_USER]: userId,
+        [FIELD_SAVED_FILTERS]: JSON.stringify(
+          parseCalendarSavedFilters(legacyRecord)
+        ),
         [FIELD_LATEST_FILTER]: valueStr,
       },
     });
@@ -119,38 +187,27 @@ export function persistLatestFilterToUserPreferences(userId, value) {
 }
 
 /**
- * Save saved filters for the current user in User_Preferences.
- * If a record for this user exists, update it; otherwise create one. One record per user.
+ * Save Calendar presets to the dedicated Calendar record. The legacy shared
+ * record and the All Activity record are never updated.
  * @param {Array} filtersArray - Array of filter objects to persist
  * @param {string} userId - Current user id (e.g. loggedInUser.id)
- * @param {string} [userDisplayName] - User's display name for the record Name (e.g. "John Doe - Preference")
  * @returns {Promise<void>}
  */
-export function saveFiltersToUserPreferences(filtersArray, userId, userDisplayName) {
+export function saveFiltersToUserPreferences(filtersArray, userId) {
   if (!ZOHO?.CRM?.API || !userId) {
     return Promise.reject(new Error("User id required"));
   }
-  const value =
-    typeof filtersArray === "string"
-      ? filtersArray
-      : JSON.stringify(filtersArray);
-  const recordName = userDisplayName
-    ? `${userDisplayName} - Preference`
-    : "User - Preference";
+  const value = JSON.stringify(parseSavedFiltersValue(filtersArray));
 
-  return ZOHO.CRM.API.searchRecord({
-    Entity: MODULE,
-    Type: "criteria",
-    Query: `(${FIELD_USER}:equals:${userId})`,
-  })
+  return searchUserPreferences(userId)
     .then((response) => {
-      const records = response?.data ?? response?.details ?? [];
-      if (records.length > 0) {
-        const first = records[0];
-        const recordId = first.id ?? first.Id ?? first.record_id;
+      const records = getRecords(response);
+      const calendarRecord = findCalendarRecord(records);
+      if (calendarRecord) {
+        const recordId = getRecordId(calendarRecord);
         if (!recordId) {
           return Promise.reject(
-            new Error("User preference record has no id")
+            new Error("Calendar preference record has no id")
           );
         }
         return ZOHO.CRM.API.updateRecord({
@@ -171,13 +228,22 @@ export function saveFiltersToUserPreferences(filtersArray, userId, userDisplayNa
           }
         });
       }
+
+      const legacyLatestFilter = parseCalendarLatestFilter(
+        findLegacyRecord(records)
+      );
+      const apiData = {
+        [FIELD_NAME]: CALENDAR_RECORD_NAME,
+        [FIELD_USER]: userId,
+        [FIELD_SAVED_FILTERS]: value,
+      };
+      if (legacyLatestFilter) {
+        apiData[FIELD_LATEST_FILTER] = JSON.stringify(legacyLatestFilter);
+      }
+
       return ZOHO.CRM.API.insertRecord({
         Entity: MODULE,
-        APIData: {
-          [FIELD_NAME]: recordName,
-          [FIELD_USER]: userId,
-          [FIELD_SAVED_FILTERS]: value,
-        },
+        APIData: apiData,
       }).then((insertResponse) => {
         const code = insertResponse?.data?.[0]?.code;
         if (code && code !== "SUCCESS") {

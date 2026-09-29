@@ -41,17 +41,13 @@ function App() {
   );
   const [picklistConfig, setPicklistConfig] = useState(null);
 
-  // Persist saved filters to User_Preferences module (Preference_Of = user, Saved_Filters = value, Name = "username - Preference").
+  // Persist saved filters to the user's dedicated Calendar preference row.
   const persistSavedFilters = useCallback(
     (value) => {
       if (!loggedInUser?.id) return Promise.reject(new Error("User not loaded"));
-      return saveFiltersToUserPreferences(
-        value,
-        loggedInUser.id,
-        loggedInUser.full_name
-      );
+      return saveFiltersToUserPreferences(value, loggedInUser.id);
     },
-    [loggedInUser?.id, loggedInUser?.full_name]
+    [loggedInUser?.id]
   );
 
   // Save filter button: save to User_Preferences, then show loading and success snackbar.
@@ -59,11 +55,7 @@ function App() {
     (value) => {
       if (!loggedInUser?.id) return;
       setFilterSaveInProgress(true);
-      saveFiltersToUserPreferences(
-        value,
-        loggedInUser.id,
-        loggedInUser.full_name
-      )
+      saveFiltersToUserPreferences(value, loggedInUser.id)
         .then(() => {
           setFilterSaveInProgress(false);
           setFilterSnackbarMessage("Filter saved successfully");
@@ -72,7 +64,7 @@ function App() {
         })
         .catch(() => setFilterSaveInProgress(false));
     },
-    [loggedInUser?.id, loggedInUser?.full_name]
+    [loggedInUser?.id]
   );
 
   const showFilterUpdateSuccessSnackbar = useCallback(() => {
