@@ -1,9 +1,6 @@
 import "./App.css";
 import TaskScheduler from "./component/TaskScheduler";
 import { useEffect, useState, useCallback } from "react";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
 import { Alert, Box, CircularProgress, Snackbar } from "@mui/material";
 import {
   loadUserPreferences,
@@ -11,18 +8,21 @@ import {
   saveFiltersToUserPreferences,
 } from "./helpers/userPreferencesFilters";
 import { fetchPicklistConfig } from "./services/picklistConfigService";
+import {
+  buildCalendarRange,
+  getDeviceTimeZone,
+  isInstantInRange,
+} from "./helpers/dateTime";
 const ZOHO = window.ZOHO;
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
-
 function App() {
+  const [initialCalendarRange] = useState(() =>
+    buildCalendarRange(new Date(), "month", getDeviceTimeZone())
+  );
   const [startDateTime, setStartDateTime] = useState(
-    dayjs().startOf("month").format("YYYY-MM-DD") + "T00:00:00+10:30"
+    initialCalendarRange.start
   );
-  const [endDateTime, setEndDateTime] = useState(
-    dayjs().endOf("month").format("YYYY-MM-DD") + "T23:59:59+10:30"
-  );
+  const [endDateTime, setEndDateTime] = useState(initialCalendarRange.end);
   const [myEvents, setMyEvents] = useState([]);
   const [zohoLoaded, setZohoLoaded] = useState(false);
   const [users, setUsers] = useState([]);
@@ -212,8 +212,11 @@ function App() {
 
     // Filter meetings within date range
     const meetingsWithinRange = allMeetingsData.filter((meeting) => {
-      const meetingStart = meeting.Start_DateTime;
-      return meetingStart >= startDateTime && meetingStart <= endDateTime;
+      return isInstantInRange(
+        meeting.Start_DateTime,
+        startDateTime,
+        endDateTime
+      );
     });
 
     // Create a Set of existing IDs for quick lookup

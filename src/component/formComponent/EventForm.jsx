@@ -26,10 +26,6 @@ import {
 import { useState } from "react";
 import "react-quill/dist/quill.snow.css";
 import CloseIcon from "@mui/icons-material/Close";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
-
 import FirstComponent from "./FirstComponent";
 import ThirdComponent from "./ThirdComponent";
 import { transformFormSubmission } from "../handleDataFormatting";
@@ -39,6 +35,10 @@ import {
 } from "../helperFunction";
 import { getDurationOptionsFromConfig } from "../../services/picklistConfigService";
 import { NEW_ACTIVITY_TITLE } from "../createActivityDefaults";
+import {
+  getDeviceTimeZone,
+  serializeDateTimeInZone,
+} from "../../helpers/dateTime";
 
 const ZOHO = window.ZOHO;
 
@@ -84,9 +84,7 @@ const EventForm = ({
   );
 
   const [loading, setLoading] = useState(false);
-
-  dayjs.extend(utc);
-  dayjs.extend(timezone);
+  const [deviceTimeZone] = useState(() => getDeviceTimeZone());
 
   const handleChange = (event, newValue) => {
     setValue(newValue);
@@ -205,9 +203,10 @@ const EventForm = ({
     Widget_Source,
     errorDetails = null,
   }) => {
-    const timeOccurred = dayjs()
-      .tz("Australia/Adelaide")
-      .format("YYYY-MM-DDTHH:mm:ssZ");
+    const timeOccurred = serializeDateTimeInZone(
+      new Date(),
+      deviceTimeZone
+    );
 
     try {
       await ZOHO.CRM.API.insertRecord({
@@ -265,7 +264,11 @@ const EventForm = ({
     try {
       // UPDATE EXISTING EVENT
       if (formData.id !== "") {
-        const transformedData = transformFormSubmission(formData);
+        const transformedData = transformFormSubmission(
+          formData,
+          null,
+          deviceTimeZone
+        );
 
         const config = {
           Entity: "Events",
@@ -273,8 +276,8 @@ const EventForm = ({
           Trigger: ["workflow"],
         };
 
-        formData.start = new Date(formData.start);
-        formData.end = new Date(formData.end);
+        formData.start = new Date(transformedData.Start_DateTime);
+        formData.end = new Date(transformedData.End_DateTime);
 
         const data = await ZOHO.CRM.API.updateRecord(config);
         const wasSuccessful = data.data[0].code === "SUCCESS";
@@ -328,7 +331,11 @@ const EventForm = ({
         // CREATE SEPARATE CONTACTS
         if (formData.create_sperate_contact) {
           const promises = formData?.scheduledWith.map(async (item) => {
-            const transformedData = transformFormSubmission(formData, item);
+            const transformedData = transformFormSubmission(
+              formData,
+              item,
+              deviceTimeZone
+            );
             try {
               const data = await ZOHO.CRM.API.insertRecord({
                 Entity: "Events",
@@ -355,6 +362,8 @@ const EventForm = ({
                   {
                     ...formData,
                     id: data?.data[0].details?.id,
+                    start: new Date(transformedData.Start_DateTime),
+                    end: new Date(transformedData.End_DateTime),
                     scheduleFor: {
                       name: item.Full_Name,
                       id: item.participant,
@@ -404,11 +413,19 @@ const EventForm = ({
           resetFormState();
         } else {
           // CREATE SINGLE EVENT
-          const transformedData = transformFormSubmission(formData);
+          const transformedData = transformFormSubmission(
+            formData,
+            null,
+            deviceTimeZone
+          );
 
-          formData.start = new Date(formData.start);
-          formData.end = new Date(formData.end);
-          formData.endTime = new Date(formData.endTime);
+          formData.start = new Date(transformedData.Start_DateTime);
+          formData.end = new Date(transformedData.End_DateTime);
+          formData.endTime = formData.endTime
+            ? new Date(
+                serializeDateTimeInZone(formData.endTime, deviceTimeZone)
+              )
+            : formData.endTime;
           formData.Recurring_Activity = transformedData.Recurring_Activity;
 
           const data = await ZOHO.CRM.API.insertRecord({
@@ -458,7 +475,9 @@ const EventForm = ({
       await handleApiError(
         error,
         formData.id ? "Update Event" : "Create Event",
-        formData.id ? transformFormSubmission(formData) : formData,
+        formData.id
+          ? transformFormSubmission(formData, null, deviceTimeZone)
+          : formData,
         formData
       );
       setSnackbarMessage("An unexpected error occurred!");
@@ -479,9 +498,7 @@ const EventForm = ({
         Stakeholder: { id: formData.associateWith.id },
       }),
       Regarding: formData.Regarding,
-      Date: dayjs(formData.start)
-        .tz("Australia/Adelaide")
-        .format("YYYY-MM-DDTHH:mm:ssZ"),
+      Date: serializeDateTimeInZone(formData.start, deviceTimeZone),
       ...(addActivityToHistory && { History_Details_Plain: activityDetails }),
       History_Result: result,
       Event_ID: formData.id,

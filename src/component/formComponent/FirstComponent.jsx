@@ -28,6 +28,10 @@ import TestContactField from "../atom/TestContactField";
 import { durationOptions as fallbackDurationOptions } from "../helperFunction";
 import { getDurationOptionsFromConfig } from "../../services/picklistConfigService";
 import { getActivityTypeSelection } from "../createActivityDefaults";
+import {
+  getCalendarDate,
+  getDeviceTimeZone,
+} from "../../helpers/dateTime";
 
 const FirstComponent = ({
   formData,
@@ -43,9 +47,14 @@ const FirstComponent = ({
 }) => {
   dayjs.extend(utc);
   dayjs.extend(timezone);
+  const deviceTimeZone = React.useMemo(() => getDeviceTimeZone(), []);
   const [displayColorPicker, setDisplayColorPicker] = useState(false);
-  const [startValue, setStartValue] = useState(dayjs(formData.start));
-  const [endValue, setEndValue] = useState(dayjs(formData.end));
+  const [startValue, setStartValue] = useState(
+    dayjs(formData.start).tz(deviceTimeZone)
+  );
+  const [endValue, setEndValue] = useState(
+    dayjs(formData.end).tz(deviceTimeZone)
+  );
   const [sendNotification, setSendNotification] = useState(
     formData?.Send_Invites
   );
@@ -60,11 +69,17 @@ const FirstComponent = ({
 
   // Sync state values with formData when it changes (e.g., when opening a different event)
   React.useEffect(() => {
-    setStartValue(dayjs(formData.start));
-    setEndValue(dayjs(formData.end));
+    setStartValue(dayjs(formData.start).tz(deviceTimeZone));
+    setEndValue(dayjs(formData.end).tz(deviceTimeZone));
     setSendNotification(formData?.Send_Invites);
     setSendReminders(formData?.Send_Reminders);
-  }, [formData.start, formData.end, formData.Send_Invites, formData.Send_Reminders]);
+  }, [
+    formData.start,
+    formData.end,
+    formData.Send_Invites,
+    formData.Send_Reminders,
+    deviceTimeZone,
+  ]);
   const [reminderMinutes] = useState(15);
 
   const ringAlarm = [
@@ -112,17 +127,17 @@ const FirstComponent = ({
   }, [activityType, formData.Type_of_Activity, formData.resource, isEditMode]);
 
   function addMinutesToDateTime(formatType, durationInMinutes) {
-    const startTime = dayjs(formData.start);
+    const startTime = dayjs(formData.start).tz(deviceTimeZone);
 
     if (formatType === "duration") {
       const endTime = startTime.add(durationInMinutes, "minute");
 
-      const modifiedEndDate = endTime.format("YYYY-MM-DDTHH:mm");
-      const modifiedStartDate = startTime.format("YYYY-MM-DDTHH:mm");
+      const modifiedEndDate = endTime.toDate();
+      const modifiedStartDate = startTime.toDate();
 
       handleInputChange("end", modifiedEndDate);
       handleInputChange("start", modifiedStartDate);
-      setEndValue(dayjs(endTime));
+      setEndValue(endTime);
     } else if (durationInMinutes && durationInMinutes.value !== undefined) {
       const reminderTime = startTime.subtract(
         durationInMinutes.value,
@@ -130,7 +145,7 @@ const FirstComponent = ({
       );
 
       console.log("startTime", reminderTime, durationInMinutes);
-      const modifiedReminderDate = reminderTime.format("YYYY-MM-DDTHH:mm");
+      const modifiedReminderDate = reminderTime.toDate();
 
       handleInputChange("Remind_At", modifiedReminderDate);
       handleInputChange("Reminder_Text", durationInMinutes.name);
@@ -152,16 +167,13 @@ const FirstComponent = ({
   };
 
   const formatTime = (date, hour) => {
-    const newDate = new Date(date);
-    newDate.setHours(hour, 0, 0, 0);
-    // Manually format the date in YYYY-MM-DDTHH:mm without converting to UTC
-    const year = newDate.getFullYear();
-    const month = String(newDate.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
-    const day = String(newDate.getDate()).padStart(2, "0");
-    const hours = String(newDate.getHours()).padStart(2, "0");
-    const minutes = String(newDate.getMinutes()).padStart(2, "0");
-
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+    const calendarDate = getCalendarDate(date, deviceTimeZone);
+    return dayjs
+      .tz(
+        `${calendarDate}T${String(hour).padStart(2, "0")}:00:00`,
+        deviceTimeZone
+      )
+      .toDate();
   };
 
   const handleBannerChecked = (e) => {
@@ -169,18 +181,18 @@ const FirstComponent = ({
     // Preserve the date from the form's start/end; only change time to 6 AM / 7 AM
     const dateToUse =
       formData.start != null && formData.start !== ""
-        ? new Date(formData.start)
+        ? formData.start
         : formData.end != null && formData.end !== ""
-          ? new Date(formData.end)
+          ? formData.end
           : selectedDate
-            ? new Date(selectedDate)
+            ? selectedDate
             : new Date();
     const timeAt6AM = formatTime(dateToUse, 6);
     const timeAt7AM = formatTime(dateToUse, 7);
     handleInputChange("start", timeAt6AM);
     handleInputChange("end", timeAt7AM);
-    setStartValue(dayjs(timeAt6AM));
-    setEndValue(dayjs(timeAt7AM));
+    setStartValue(dayjs(timeAt6AM).tz(deviceTimeZone));
+    setEndValue(dayjs(timeAt7AM).tz(deviceTimeZone));
   };
 
   function getTimeDifference(end) {
@@ -350,6 +362,7 @@ const FirstComponent = ({
             <DesktopDateTimePicker
               label="Start Time"
               value={startValue}
+              timezone={deviceTimeZone}
               disabled={formData.Banner ? true : false}
               // slotProps={{ textField: { size: "small" } }}
               onChange={(e) => {
@@ -401,6 +414,7 @@ const FirstComponent = ({
             <DesktopDateTimePicker
               label="End Time"
               value={endValue}
+              timezone={deviceTimeZone}
               disabled={formData.Banner ? true : false}
               slotProps={{ textField: { size: "small" } }}
               onChange={(e) => handleEndDateChange(e)}
@@ -467,6 +481,15 @@ const FirstComponent = ({
               ))}
             </Select>
           </FormControl>
+        </Grid>
+
+        <Grid size={18} sx={{ mt: -1.5, mb: -1, textAlign: "right" }}>
+          <Typography
+            variant="caption"
+            sx={{ color: "text.secondary", fontSize: "8pt" }}
+          >
+            Timezone: {deviceTimeZone}
+          </Typography>
         </Grid>
 
         <Grid

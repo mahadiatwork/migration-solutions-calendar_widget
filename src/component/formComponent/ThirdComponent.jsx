@@ -9,18 +9,25 @@ import {
   Typography,
 } from "@mui/material";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Datepicker } from "@mobiscroll/react";
+import { Datepicker, momentTimezone } from "@mobiscroll/react";
+import moment from "moment-timezone";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import CustomTextField from "../atom/CustomTextField";
+import {
+  getDeviceTimeZone,
+  serializeDateTimeInZone,
+} from "../../helpers/dateTime";
 
+momentTimezone.moment = moment;
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
   const [openStartDatepicker, setOpenStartDatepicker] = useState(false);
   const [openEndDatepicker, setOpenEndDatepicker] = useState(false);
+  const [deviceTimeZone] = useState(() => getDeviceTimeZone());
 
   const initialized = useRef(false);
 
@@ -33,11 +40,17 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
       : formData?.occurrence;
 
     if (!formData.startTime) {
-      const currentTime = dayjs().toISOString();
+      const currentTime = serializeDateTimeInZone(
+        new Date(),
+        deviceTimeZone
+      );
       handleInputChange("startTime", currentTime);
       handleInputChange(
         "endTime",
-        dayjs(currentTime).add(1, "year").toISOString()
+        serializeDateTimeInZone(
+          dayjs(currentTime).add(1, "year"),
+          deviceTimeZone
+        )
       );
     }
 
@@ -49,12 +62,14 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
       }, {});
 
       if (ruleParts.DTSTART) {
-        const datePart = dayjs(ruleParts.DTSTART);
+        const datePart = dayjs.tz(ruleParts.DTSTART, deviceTimeZone);
 
         const timeStart = clickedEvent?.start
-          ? dayjs(clickedEvent.start)
+          ? dayjs(clickedEvent.start).tz(deviceTimeZone)
           : null;
-        const timeEnd = clickedEvent?.end ? dayjs(clickedEvent.end) : null;
+        const timeEnd = clickedEvent?.end
+          ? dayjs(clickedEvent.end).tz(deviceTimeZone)
+          : null;
 
         const mergedStart = timeStart
           ? datePart.hour(timeStart.hour()).minute(timeStart.minute()).second(0)
@@ -67,8 +82,14 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
               .second(0)
           : datePart.add(1, "hour");
 
-        handleInputChange("startTime", mergedStart.toISOString());
-        handleInputChange("endTime", mergedEnd.toISOString());
+        handleInputChange(
+          "startTime",
+          serializeDateTimeInZone(mergedStart, deviceTimeZone)
+        );
+        handleInputChange(
+          "endTime",
+          serializeDateTimeInZone(mergedEnd, deviceTimeZone)
+        );
 
         const freqMap = {
           DAILY: "daily",
@@ -82,8 +103,8 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
         }
       }
     } else {
-      const timeStart = dayjs(formData.start);
-      const timeEnd = dayjs(formData.end);
+      const timeStart = dayjs(formData.start).tz(deviceTimeZone);
+      const timeEnd = dayjs(formData.end).tz(deviceTimeZone);
       handleInputChange("startTime", timeStart);
       handleInputChange("endTime", timeEnd);
     }
@@ -171,11 +192,16 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
               calendarType="month"
               display="center"
               calendarScroll="vertical"
+              timezonePlugin={momentTimezone}
+              dataTimezone={deviceTimeZone}
+              displayTimezone={deviceTimeZone}
               inputComponent={() => {
                 const dateValue = formData?.startTime;
                 const formattedDate =
                   dateValue && dayjs(dateValue).isValid()
-                    ? dayjs(dateValue).format("DD/MM/YYYY hh:mm A")
+                    ? dayjs(dateValue)
+                        .tz(deviceTimeZone)
+                        .format("DD/MM/YYYY hh:mm A")
                     : "";
                 return (
                   <CustomInputComponent
@@ -186,7 +212,10 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
               }}
               onClose={() => setOpenStartDatepicker(false)}
               onChange={(e) => {
-                handleInputChange("startTime", e.value);
+                handleInputChange(
+                  "startTime",
+                  serializeDateTimeInZone(e.value, deviceTimeZone)
+                );
               }}
               isOpen={openStartDatepicker}
             />
@@ -206,13 +235,18 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
               display="center"
               disabled={formData.noEndDate}
               calendarScroll="vertical"
+              timezonePlugin={momentTimezone}
+              dataTimezone={deviceTimeZone}
+              displayTimezone={deviceTimeZone}
               min={minDate}
               max={maxDate}
               inputComponent={() => {
                 const dateValue = formData?.endTime;
                 const formattedDate =
                   dateValue && dayjs(dateValue).isValid()
-                    ? dayjs(dateValue).format("DD/MM/YYYY hh:mm A")
+                    ? dayjs(dateValue)
+                        .tz(deviceTimeZone)
+                        .format("DD/MM/YYYY hh:mm A")
                     : "";
                 return (
                   <CustomInputComponent
@@ -232,13 +266,22 @@ const ThirdComponent = ({ formData, handleInputChange, clickedEvent }) => {
                   .minute(currentTime.minute())
                   .second(currentTime.second());
 
-                handleInputChange("endTime", mergedDateTime);
+                handleInputChange(
+                  "endTime",
+                  serializeDateTimeInZone(mergedDateTime, deviceTimeZone)
+                );
               }}
               isOpen={openEndDatepicker}
             />
           </Box>
         </Grid>
       </Grid>
+      <Typography
+        variant="caption"
+        sx={{ display: "block", textAlign: "right", color: "text.secondary" }}
+      >
+        Timezone: {deviceTimeZone}
+      </Typography>
     </Box>
   );
 };

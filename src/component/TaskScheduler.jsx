@@ -44,6 +44,12 @@ import {
   getCreateActivityDefaults,
   NEW_ACTIVITY_TITLE,
 } from "./createActivityDefaults";
+import {
+  buildCalendarRange,
+  getCalendarDate,
+  getDeviceTimeZone,
+  isFutureInstant,
+} from "../helpers/dateTime";
 
 momentTimezone.moment = moment;
 dayjs.extend(utc);
@@ -54,9 +60,6 @@ setOptions({
   theme: "ios",
   themeVariant: "light",
 });
-
-const now = new Date();
-const today = now.toISOString().slice(0, 16);
 
 const EMPTY_FILTER = {
   priorityFilter: [],
@@ -105,9 +108,10 @@ const TaskScheduler = ({
   onFilterUpdateError,
   picklistConfig = null,
 }) => {
+  const deviceTimeZone = useMemo(() => getDeviceTimeZone(), []);
   const [activityType, setActivityType] = useState(activityTypeMapping);
   const [selectedDate, setSelectedDate] = useState(
-    dayjs().format("YYYY-MM-DD")
+    getCalendarDate(new Date(), deviceTimeZone)
   );
   const [myView, setMyView] = useState({
     schedule: {
@@ -431,7 +435,7 @@ const TaskScheduler = ({
     for (const event of myEvents) {
       event.start = event.start ? new Date(event.start) : event.start;
       event.end = event.end ? new Date(event.end) : event.end;
-      event.editable = !!(event.start && today < event.start);
+      event.editable = !!(event.start && isFutureInstant(event.start));
     }
   }, [myEvents]);
 
@@ -440,12 +444,6 @@ const TaskScheduler = ({
 
     switch (event.target.value) {
       case "month":
-        // setStartDateTime(
-        //   dayjs().startOf("month").format("YYYY-MM-DD") + "T00:00:00+10:30"
-        // );
-        // setEndDateTime(
-        //   dayjs().endOf("month").format("YYYY-MM-DD") + "T23:59:59+10:30"
-        // );
         myView = {
           // schedule: {
           //   type: "month",
@@ -456,14 +454,6 @@ const TaskScheduler = ({
 
         break;
       case "week":
-        // setStartDateTime(
-        //   dayjs().day(1).startOf("week").format("YYYY-MM-DD") +
-        //     "T00:00:00+10:30"
-        // );
-        // setEndDateTime(
-        //   dayjs().day(1).startOf("week").endOf("week").format("YYYY-MM-DD") +
-        //     "T23:59:59+10:30"
-        // );
         myView = {
           schedule: {
             type: "week",
@@ -481,8 +471,6 @@ const TaskScheduler = ({
 
         break;
       case "day":
-        // setStartDateTime(dayjs().format("YYYY-MM-DD") + "T00:00:00+10:30");
-        // setEndDateTime(dayjs().format("YYYY-MM-DD") + "T23:59:59+10:30");
         myView = {
           schedule: {
             type: "day",
@@ -546,7 +534,7 @@ const TaskScheduler = ({
   );
 
   const handleFailed = useCallback((event) => {
-    if (event.start <= today) {
+    if (!isFutureInstant(event.start)) {
       setToastMessage("Can't add event in the past");
     } else {
       setToastMessage("Make sure not to double book");
@@ -634,17 +622,10 @@ const TaskScheduler = ({
     );
     handleInputChange("duration", initialDuration);
     handleInputChange("priority", "medium");
-    let date = new Date(args.date);
+    const reminderDate = new Date(args.date);
+    reminderDate.setMinutes(reminderDate.getMinutes() - 5);
 
-    date.setMinutes(date.getMinutes() - parseInt(5, 10));
-
-    const localDate = new Date(
-      date.getTime() - date.getTimezoneOffset() * 60000
-    );
-
-    const modifiedDate = localDate.toISOString().slice(0, 16);
-
-    handleInputChange("Remind_At", modifiedDate);
+    handleInputChange("Remind_At", reminderDate);
     handleInputChange("Reminder_Text", "");
 
     // Pre-fill scheduleFor from the clicked user column
@@ -676,16 +657,15 @@ const TaskScheduler = ({
   const customWithNavButtons = useCallback(() => {
     const props = { placeholder: "Select date...", inputStyle: "box" };
     const handleDatepickerDates = (e) => {
-      let currentDate = dayjs(e.value).format("YYYY-MM-DD");
-      const beginDate =
-        dayjs(currentDate).startOf("day").format("YYYY-MM-DD") +
-        "T00:00:00+10:30";
-      const closeDate =
-        dayjs(currentDate).endOf("day").format("YYYY-MM-DD") +
-        "T23:59:59+10:30";
-      setSelectedDate(e.value);
-      setStartDateTime(beginDate);
-      setEndDateTime(closeDate);
+      const currentDate = getCalendarDate(e.value, deviceTimeZone);
+      const range = buildCalendarRange(
+        currentDate,
+        "day",
+        deviceTimeZone
+      );
+      setSelectedDate(currentDate);
+      setStartDateTime(range.start);
+      setEndDateTime(range.end);
       setView("day");
       setMyView({
         schedule: {
@@ -743,7 +723,17 @@ const TaskScheduler = ({
             inputProps={props}
             onChange={handleDatepickerDates}
             value={selectedDate}
+            timezonePlugin={momentTimezone}
+            dataTimezone={deviceTimeZone}
+            displayTimezone={deviceTimeZone}
           />
+
+          <Typography
+            variant="caption"
+            sx={{ mx: 1, whiteSpace: "nowrap", color: "text.secondary" }}
+          >
+            Timezone: {deviceTimeZone}
+          </Typography>
 
           <Button
             variant="contained"
@@ -758,7 +748,14 @@ const TaskScheduler = ({
         </span>
       </span>
     );
-  }, [view, changeView, selectedDate, setEndDateTime, setStartDateTime]);
+  }, [
+    view,
+    changeView,
+    selectedDate,
+    setEndDateTime,
+    setStartDateTime,
+    deviceTimeZone,
+  ]);
 
   const onClose = () => {
     setOpen(false);
@@ -859,8 +856,8 @@ const TaskScheduler = ({
       priority: args?.event?.priority?.toLowerCase(),
       Remind_At: args?.event?.Remind_At,
       occurrence: args?.event?.occurrence,
-      start: dayjs(args?.event?.start).format("YYYY-MM-DDTHH:mm"),
-      end: dayjs(args?.event?.end).format("YYYY-MM-DDTHH:mm"),
+      start: args?.event?.start ? new Date(args.event.start) : "",
+      end: args?.event?.end ? new Date(args.event.end) : "",
       noEndDate: false,
       color: args?.event?.color,
       Banner: args?.event?.Banner,
@@ -877,41 +874,15 @@ const TaskScheduler = ({
   };
 
   const onPageChange = async (e) => {
-    let newStartDate = dayjs(e.month).format("YYYY-MM-DD");
+    const newStartDate = getCalendarDate(e.month, deviceTimeZone);
     setSelectedDate(newStartDate);
-
-    if (view === "day") {
-      const beginDate =
-        dayjs(newStartDate).startOf("day").format("YYYY-MM-DD") +
-        "T00:00:00+10:30";
-      const closeDate =
-        dayjs(newStartDate).endOf("day").format("YYYY-MM-DD") +
-        "T23:59:59+10:30";
-      setStartDateTime(beginDate);
-      setEndDateTime(closeDate);
-    }
-
-    if (view === "week") {
-      const beginDate =
-        dayjs(newStartDate).startOf("day").format("YYYY-MM-DD") +
-        "T00:00:00+10:30";
-      const closeDate =
-        dayjs(newStartDate).add(4, "day").format("YYYY-MM-DD") +
-        "T23:59:59+10:30";
-      setStartDateTime(beginDate);
-      setEndDateTime(closeDate);
-    }
-
-    if (view === "month") {
-      const beginDate =
-        dayjs(newStartDate).startOf("day").format("YYYY-MM-DD") +
-        "T00:00:00+10:30";
-      const closeDate =
-        dayjs(newStartDate).endOf("month").format("YYYY-MM-DD") +
-        "T23:59:59+10:30";
-      setStartDateTime(beginDate);
-      setEndDateTime(closeDate);
-    }
+    const range = buildCalendarRange(
+      newStartDate,
+      view,
+      deviceTimeZone
+    );
+    setStartDateTime(range.start);
+    setEndDateTime(range.end);
   };
 
   const openTooltip = useCallback((args) => {
@@ -1062,7 +1033,7 @@ const TaskScheduler = ({
             <Eventcalendar
               timezonePlugin={momentTimezone}
               dataTimezone="utc"
-              // displayTimezone="Australia/Adelaide"
+              displayTimezone={deviceTimeZone}
               data={filteredEvents}
               view={myView}
               resources={visibleResources}
@@ -1203,7 +1174,9 @@ const TaskScheduler = ({
                     Start time
                   </Typography>
                   <Typography variant="p">
-                    {dayjs(hoverInEvents?.start).format("DD/MM/YYYY hh:mm A")}
+                    {dayjs(hoverInEvents?.start)
+                      .tz(deviceTimeZone)
+                      .format("DD/MM/YYYY hh:mm A")}
                   </Typography>
                 </Box>
                 <Box
@@ -1226,7 +1199,9 @@ const TaskScheduler = ({
                     End time
                   </Typography>
                   <Typography variant="p">
-                    {dayjs(hoverInEvents?.end).format("DD/MM/YYYY hh:mm A")}
+                    {dayjs(hoverInEvents?.end)
+                      .tz(deviceTimeZone)
+                      .format("DD/MM/YYYY hh:mm A")}
                   </Typography>
                 </Box>
                 <Box

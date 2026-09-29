@@ -1,6 +1,11 @@
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import {
+  getCalendarDate,
+  getDeviceTimeZone,
+  serializeDateTimeInZone,
+} from "../helpers/dateTime";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -29,10 +34,15 @@ function getResourceByType(type) {
   return match ? match.resource : null;
 }
 
-export function transformFormSubmission(data, individualParticipant = null) {
-  const localTimezone = dayjs.tz.guess();
+export function transformFormSubmission(
+  data,
+  individualParticipant = null,
+  deviceTimeZone = getDeviceTimeZone()
+) {
   const durationValue = data.Duration_Min ?? data.duration;
   const hasDuration = durationValue !== "" && durationValue != null;
+  const serializedStart = serializeDateTimeInZone(data?.start, deviceTimeZone);
+  const serializedEnd = serializeDateTimeInZone(data?.end, deviceTimeZone);
 
   const transformScheduleWithToParticipants = (scheduleWith) => {
     return scheduleWith.map((contact) => ({
@@ -66,12 +76,8 @@ export function transformFormSubmission(data, individualParticipant = null) {
   let transformedData = {
     ...data,
     Event_Title: data?.title,
-    Start_DateTime: dayjs(data?.start)
-      .tz(localTimezone)
-      .format("YYYY-MM-DDTHH:mm:ssZ"),
-    End_DateTime: dayjs(data?.end)
-      .tz(localTimezone)
-      .format("YYYY-MM-DDTHH:mm:ssZ"),
+    Start_DateTime: serializedStart,
+    End_DateTime: serializedEnd,
     Description: data?.Description,
     Event_Priority: data?.priority,
     Owner: {
@@ -99,18 +105,21 @@ export function transformFormSubmission(data, individualParticipant = null) {
   // config options instead of dropping it from the payload.
   transformedData.resource = resourceValue ?? data.resource ?? null;
 
-  const startTime = dayjs(data.start).tz(localTimezone);
+  const startTime = dayjs(serializedStart);
+  const serializeReminderTime = (minutesBefore = 0) =>
+    serializeDateTimeInZone(
+      startTime.subtract(minutesBefore, "minute").toDate(),
+      deviceTimeZone
+    );
 
   if (data.Send_Reminders) {
     let modifiedReminderDate = null;
 
     if (data.Reminder_Text === "At time of meeting") {
-      modifiedReminderDate = startTime.format("YYYY-MM-DDTHH:mm:ssZ");
+      modifiedReminderDate = serializeReminderTime();
     } else {
       const offsetMin = parseInt(data?.Reminder_Text.split(" ")[0], 10);
-      modifiedReminderDate = startTime
-        .subtract(offsetMin, "minute")
-        .format("YYYY-MM-DDTHH:mm:ssZ");
+      modifiedReminderDate = serializeReminderTime(offsetMin);
     }
 
     transformedData.Remind_At = modifiedReminderDate;
@@ -122,12 +131,10 @@ export function transformFormSubmission(data, individualParticipant = null) {
     let inviteReminderDate = null;
 
     if (data.Reminder_Text === "At time of meeting") {
-      inviteReminderDate = startTime.format("YYYY-MM-DDTHH:mm:ssZ");
+      inviteReminderDate = serializeReminderTime();
     } else {
       const offsetMin = parseInt(data?.Reminder_Text.split(" ")[0], 10);
-      inviteReminderDate = startTime
-        .subtract(offsetMin, "minute")
-        .format("YYYY-MM-DDTHH:mm:ssZ");
+      inviteReminderDate = serializeReminderTime(offsetMin);
     }
 
     transformedData.Remind_At = inviteReminderDate;
@@ -143,18 +150,19 @@ export function transformFormSubmission(data, individualParticipant = null) {
   ) {
     const freq = data.occurrence.toUpperCase();
     const interval = 1;
-    const until = dayjs(customEndTime).format("YYYY-MM-DD");
-    const dtstart = dayjs(data?.startTime).format("YYYY-MM-DD");
-    const byDay = dayjs(data?.startTime).format("dd").toUpperCase();
+    const until = getCalendarDate(customEndTime, deviceTimeZone);
+    const dtstart = getCalendarDate(data?.startTime, deviceTimeZone);
+    const recurrenceStart = dayjs.tz(dtstart, deviceTimeZone);
+    const byDay = recurrenceStart.format("dd").toUpperCase();
 
     let rrule = `FREQ=${freq};INTERVAL=${interval};UNTIL=${until}`;
 
     if (freq === "WEEKLY") {
       rrule += `;BYDAY=${byDay}`;
     } else if (freq === "MONTHLY") {
-      rrule += `;BYMONTHDAY=${dayjs(data?.startTime).date()}`;
+      rrule += `;BYMONTHDAY=${recurrenceStart.date()}`;
     } else if (freq === "YEARLY") {
-      rrule += `;BYMONTH=${dayjs(data?.startTime).month() + 1};BYMONTHDAY=${dayjs(data?.startTime).date()}`;
+      rrule += `;BYMONTH=${recurrenceStart.month() + 1};BYMONTHDAY=${recurrenceStart.date()}`;
     }
 
     rrule += `;DTSTART=${dtstart}`;
