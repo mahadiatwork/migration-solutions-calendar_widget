@@ -1,3 +1,5 @@
+import { filterReservedRegardingOptions } from "./atom/helperFunc";
+
 // Function to check if a date falls within a specific range
 export const isDateInRange = (date, rangeType) => {
   const today = new Date();
@@ -158,7 +160,7 @@ export const getRegardingOptions = (type, existingValue, config = null) => {
     ) {
       options.unshift(safeExistingValue);
     }
-    return options;
+    return filterReservedRegardingOptions(options);
   }
 
   const options = {
@@ -199,7 +201,7 @@ export const getRegardingOptions = (type, existingValue, config = null) => {
     predefinedOptions = [safeExistingValue, ...predefinedOptions];
   }
 
-  return predefinedOptions;
+  return filterReservedRegardingOptions(predefinedOptions);
 };
 
 

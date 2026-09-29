@@ -40,6 +40,10 @@ import {
   getDurationOptionsFromConfig,
   getTypeOptionsFromConfig,
 } from "../services/picklistConfigService";
+import {
+  getCreateActivityDefaults,
+  NEW_ACTIVITY_TITLE,
+} from "./createActivityDefaults";
 
 momentTimezone.moment = moment;
 dayjs.extend(utc);
@@ -138,9 +142,10 @@ const TaskScheduler = ({
     getDurationOptionsFromConfig(picklistConfig)[0] ?? "";
   const rawNewEventDuration = newEvent?.duration;
   const parsedNewEventDuration = Number.parseInt(rawNewEventDuration, 10);
+  const createActivityDefaults = getCreateActivityDefaults();
   const [formData, setFormData] = useState({
     id: newEvent?.id || "",
-    title: newEvent?.title || "New Meeting",
+    title: newEvent?.title || createActivityDefaults.title,
     startTime: "",
     endTime: "",
     duration:
@@ -151,7 +156,9 @@ const TaskScheduler = ({
         ? defaultConfiguredDuration
         : parsedNewEventDuration,
     associateWith: newEvent?.associateWith || null,
-    Type_of_Activity: newEvent?.Type_of_Activity?.toLowerCase() || "",
+    Type_of_Activity:
+      newEvent?.Type_of_Activity?.toLowerCase() ||
+      createActivityDefaults.Type_of_Activity,
     resource: newEvent?.resource || 0,
     scheduleFor: loggedInUser || "",
     scheduledWith: [],
@@ -166,7 +173,7 @@ const TaskScheduler = ({
     Banner: newEvent?.Banner || false,
     Description: newEvent?.Description || "",
     create_sperate_contact: false,
-    Regarding: newEvent?.Regarding || "",
+    Regarding: newEvent?.Regarding || createActivityDefaults.Regarding,
     Reminder_Text: newEvent?.Reminder_Text || "",
     send_notification: newEvent?.send_notification || false,
     Send_Reminders: newEvent?.Send_Reminders || false,
@@ -522,6 +529,10 @@ const TaskScheduler = ({
     const event = args.event;
     event.unscheduled = false;
     setColors([]);
+    setFormData((current) => ({
+      ...current,
+      ...getCreateActivityDefaults(),
+    }));
     setOpen(true);
   }, []);
 
@@ -616,7 +627,7 @@ const TaskScheduler = ({
         ? getDurationOptionsFromConfig(picklistConfig)[0] ?? ""
         : 60;
     handleInputChange("start", args.date);
-    handleInputChange("title", "new meeting");
+    handleInputChange("title", NEW_ACTIVITY_TITLE);
     handleInputChange(
       "end",
       new Date(dayjs(args.date).add(initialDuration || 0, "minute").toDate())
@@ -753,7 +764,7 @@ const TaskScheduler = ({
     setOpen(false);
     setFormData({
       id: "",
-      title: "",
+      title: NEW_ACTIVITY_TITLE,
       startTime: "",
       endTime: "",
       duration:
@@ -773,6 +784,7 @@ const TaskScheduler = ({
       color: "#d1891f",
       Banner: false,
       Description: "",
+      Regarding: "",
       send_notification: false,
     });
     setClickedEvent(null);

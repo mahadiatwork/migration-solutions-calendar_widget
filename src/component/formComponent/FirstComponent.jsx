@@ -25,11 +25,9 @@ import CustomColorPicker from "../atom/CustomColorPicker";
 import { LocalizationProvider } from "@mui/x-date-pickers";
 import { DesktopDateTimePicker } from '@mui/x-date-pickers/DesktopDateTimePicker';
 import TestContactField from "../atom/TestContactField";
-import {
-  durationOptions as fallbackDurationOptions,
-  getRegardingOptions,
-} from "../helperFunction";
+import { durationOptions as fallbackDurationOptions } from "../helperFunction";
 import { getDurationOptionsFromConfig } from "../../services/picklistConfigService";
+import { getActivityTypeSelection } from "../createActivityDefaults";
 
 const FirstComponent = ({
   formData,
@@ -146,15 +144,10 @@ const FirstComponent = ({
     );
 
     if (selectedActivity) {
-      // Update both the activity type and the resource
-      handleInputChange("Type_of_Activity", selectedActivity.type);
-      handleInputChange("resource", selectedActivity.resource);
-      const regardingOptions = getRegardingOptions(
-        selectedActivity.type,
-        undefined,
-        picklistConfig
-      );
-      handleInputChange("Regarding", regardingOptions[0] || "");
+      const selection = getActivityTypeSelection(selectedActivity);
+      handleInputChange("Type_of_Activity", selection.Type_of_Activity);
+      handleInputChange("resource", selection.resource);
+      handleInputChange("Regarding", selection.Regarding);
     }
   };
 

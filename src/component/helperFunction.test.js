@@ -4,8 +4,10 @@ import {
   getResultBasedOnActivityType2,
 } from "./helperFunction";
 import {
+  CUSTOM_REGARDING_LABEL,
+  CUSTOM_REGARDING_OPTION,
+  getPersistedRegardingValue,
   getRegardingOptions as getRegardingFieldOptions,
-  shouldOfferManualOther,
 } from "./atom/helperFunc";
 
 describe("custom-module dependent picklists", () => {
@@ -47,7 +49,7 @@ describe("custom-module dependent picklists", () => {
     ).toEqual([]);
   });
 
-  test("uses exact-parent regarding, then _default, without adding legacy or Other values", () => {
+  test("uses exact-parent regarding, then _default, without adding legacy values", () => {
     const config = {
       _source: "custom_module",
       regarding: {
@@ -87,8 +89,35 @@ describe("custom-module dependent picklists", () => {
     expect(getRegardingFieldOptions("Appointment", undefined, config)).toEqual([
       "Visa",
     ]);
-    expect(shouldOfferManualOther(config, ["Visa"])).toBe(false);
-    expect(shouldOfferManualOther(config, ["Visa", "Other"])).toBe(true);
-    expect(shouldOfferManualOther({ _source: "fallback" }, [])).toBe(true);
+  });
+
+  test("persists custom Regarding text instead of its UI sentinel", () => {
+    expect(getPersistedRegardingValue("Visa")).toBe("Visa");
+    expect(getPersistedRegardingValue(CUSTOM_REGARDING_OPTION)).toBe("");
+    expect(
+      getPersistedRegardingValue(CUSTOM_REGARDING_OPTION, "My own regarding")
+    ).toBe("My own regarding");
+  });
+
+  test("filters reserved Custom values without removing configured Other", () => {
+    const config = {
+      _source: "custom_module",
+      regarding: {
+        Appointment: [
+          CUSTOM_REGARDING_LABEL,
+          CUSTOM_REGARDING_OPTION,
+          "Other",
+          "Visa",
+        ],
+      },
+    };
+
+    expect(getRegardingOptions("Appointment", undefined, config)).toEqual([
+      "Other",
+      "Visa",
+    ]);
+    expect(
+      getRegardingFieldOptions("Appointment", undefined, config)
+    ).toEqual(["Other", "Visa"]);
   });
 });

@@ -1,3 +1,13 @@
+export const CUSTOM_REGARDING_LABEL = "Custom";
+export const CUSTOM_REGARDING_OPTION = "__custom_regarding__";
+
+export const filterReservedRegardingOptions = (options = []) =>
+  (Array.isArray(options) ? options : []).filter(
+    (option) =>
+      option !== CUSTOM_REGARDING_LABEL &&
+      option !== CUSTOM_REGARDING_OPTION
+  );
+
 export const getRegardingOptions = (type, existingValue, config = null) => {
     if (config?._source === "custom_module") {
       const regarding = config.regarding || {};
@@ -15,7 +25,7 @@ export const getRegardingOptions = (type, existingValue, config = null) => {
       ) {
         options.unshift(safeExistingValue);
       }
-      return options;
+      return filterReservedRegardingOptions(options);
     }
 
     const options = {
@@ -56,8 +66,11 @@ export const getRegardingOptions = (type, existingValue, config = null) => {
       predefinedOptions = [safeExistingValue, ...predefinedOptions];
     }
   
-    return predefinedOptions;
+    return filterReservedRegardingOptions(predefinedOptions);
   };
 
-export const shouldOfferManualOther = (config, configuredOptions = []) =>
-  config?._source !== "custom_module" || configuredOptions.includes("Other");
+export const getPersistedRegardingValue = (
+  selectedValue,
+  customValue = ""
+) =>
+  selectedValue === CUSTOM_REGARDING_OPTION ? customValue : selectedValue;

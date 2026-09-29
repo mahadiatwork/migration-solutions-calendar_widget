@@ -7,7 +7,12 @@ import {
   TextField,
   Box,
 } from "@mui/material";
-import { getRegardingOptions, shouldOfferManualOther } from "./helperFunc"; // Import the function
+import {
+  CUSTOM_REGARDING_LABEL,
+  CUSTOM_REGARDING_OPTION,
+  getPersistedRegardingValue,
+  getRegardingOptions,
+} from "./helperFunc";
 
 const RegardingField = ({
   formData,
@@ -17,10 +22,6 @@ const RegardingField = ({
 }) => {
   const existingValue = formData?.Regarding ?? "";
   const activityType = formData?.Type_of_Activity;
-  const configuredOptions = React.useMemo(
-    () => getRegardingOptions(activityType, undefined, picklistConfig),
-    [activityType, picklistConfig]
-  );
   const predefinedOptions = React.useMemo(
     () =>
       getRegardingOptions(
@@ -30,14 +31,6 @@ const RegardingField = ({
       ),
     [activityType, existingValue, isEditMode, picklistConfig]
   ); // Get dynamic options based on type
-  const manualOtherEnabled = shouldOfferManualOther(
-    picklistConfig,
-    configuredOptions
-  );
-  const selectOptions = manualOtherEnabled
-    ? predefinedOptions.filter((option) => option !== "Other")
-    : predefinedOptions;
-
   const [selectedValue, setSelectedValue] = useState(existingValue || "");
   const [manualInput, setManualInput] = useState("");
   const previousType = useRef(activityType);
@@ -48,40 +41,33 @@ const RegardingField = ({
 
     // Manual text is mirrored into formData. Keep the editor open while the
     // user types, but reset it when the activity Type changes.
-    if (!typeChanged && manualOtherEnabled && selectedValue === "Other") return;
+    if (!typeChanged && selectedValue === CUSTOM_REGARDING_OPTION) return;
 
-    // If existingValue is not in the predefined options, set it to "Other" and show manual input
+    // Existing free text belongs in the always-available Custom editor.
     if (existingValue && !predefinedOptions.includes(existingValue)) {
-      if (manualOtherEnabled) {
-        setSelectedValue("Other");
-        setManualInput(existingValue);
-      } else {
-        setSelectedValue("");
-        setManualInput("");
-      }
+      setSelectedValue(CUSTOM_REGARDING_OPTION);
+      setManualInput(existingValue);
     } else {
       setSelectedValue(existingValue);
       setManualInput("");
     }
-  }, [activityType, existingValue, manualOtherEnabled, predefinedOptions, selectedValue]);
+  }, [activityType, existingValue, predefinedOptions, selectedValue]);
 
   const handleSelectChange = (event) => {
     const value = event.target.value;
     setSelectedValue(value);
 
-    if (value !== "Other" || !manualOtherEnabled) {
-      setManualInput(""); // Clear manual input when a predefined option is selected
-      handleInputChange("Regarding", value);
-    } else {
-      setManualInput(""); // Reset manual input when "Other" is selected
-      handleInputChange("Regarding", "");
-    }
+    setManualInput("");
+    handleInputChange("Regarding", getPersistedRegardingValue(value));
   };
 
   const handleManualInputChange = (event) => {
     const value = event.target.value;
     setManualInput(value);
-    handleInputChange("Regarding", value);
+    handleInputChange(
+      "Regarding",
+      getPersistedRegardingValue(CUSTOM_REGARDING_OPTION, value)
+    );
   };
 
   return (
@@ -98,20 +84,18 @@ const RegardingField = ({
           label="Regarding"
           sx={{ fontSize: "9pt" }}
         >
-          {selectOptions.map((option) => (
+          {predefinedOptions.map((option) => (
             <MenuItem key={option} value={option} sx={{ fontSize: "9pt" }}>
               {option}
             </MenuItem>
           ))}
-          {manualOtherEnabled && (
-            <MenuItem value="Other" sx={{ fontSize: "9pt" }}>
-              Other (Manually enter)
-            </MenuItem>
-          )}
+          <MenuItem value={CUSTOM_REGARDING_OPTION} sx={{ fontSize: "9pt" }}>
+            {CUSTOM_REGARDING_LABEL}
+          </MenuItem>
         </Select>
       </FormControl>
 
-      {manualOtherEnabled && selectedValue === "Other" && (
+      {selectedValue === CUSTOM_REGARDING_OPTION && (
         <TextField
           label="Enter your custom regarding"
           fullWidth

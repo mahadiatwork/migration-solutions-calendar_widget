@@ -38,6 +38,7 @@ import {
   getResultBasedOnActivityType2,
 } from "../helperFunction";
 import { getDurationOptionsFromConfig } from "../../services/picklistConfigService";
+import { NEW_ACTIVITY_TITLE } from "../createActivityDefaults";
 
 const ZOHO = window.ZOHO;
 
@@ -108,7 +109,7 @@ const EventForm = ({
     setAddActivityToHistory(true);
     setFormData({
       id: "",
-      title: "",
+      title: NEW_ACTIVITY_TITLE,
       startTime: "",
       endTime: "",
       duration: getDurationOptionsFromConfig(picklistConfig)[0] ?? "",
@@ -127,6 +128,7 @@ const EventForm = ({
       color: "#d1891f",
       Banner: false,
       Description: "",
+      Regarding: "",
       send_notification: false,
       Send_Reminders: false,
     });
@@ -821,7 +823,7 @@ const EventForm = ({
     setAddActivityToHistory(true);
     setFormData({
       id: "",
-      title: "",
+      title: NEW_ACTIVITY_TITLE,
       startTime: "",
       endTime: "",
       duration: getDurationOptionsFromConfig(picklistConfig)[0] ?? "",
@@ -840,6 +842,7 @@ const EventForm = ({
       color: "#d1891f",
       Banner: false,
       Description: "",
+      Regarding: "",
       send_notification: false,
       Send_Reminders: false,
     });
