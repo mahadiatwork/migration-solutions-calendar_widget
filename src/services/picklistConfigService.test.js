@@ -121,6 +121,86 @@ describe("picklistConfigService", () => {
     ).toEqual([]);
   });
 
+  test.each([
+    ["History Type", (config) => getTypeOptionsFromConfig(config)],
+    ["History Result", (config) => getResultOptionsFromConfig("Fruit", config)],
+    ["Regarding", (config) => getRegardingOptionsFromConfig("Fruit", config)],
+    ["Duration", (config) => getDurationOptionsFromConfig(config).map(String)],
+  ])("orders %s by numeric priority, including zero and large values", async (category, options) => {
+    const getAllRecords = jest.fn().mockResolvedValue({
+      data: [
+        { Name: "15", Sort_Order: null },
+        { Name: "30", Sort_Order: "10" },
+        { Name: "45", Sort_Order: "9" },
+        { Name: "60", Sort_Order: 10000 },
+        { Name: "90", Sort_Order: 0 },
+      ].map((record) => ({
+        ...record,
+        Category: category,
+        Parent_Type: "Fruit",
+        Active: true,
+      })),
+    });
+    window.ZOHO = { CRM: { API: { getAllRecords } } };
+
+    expect(options(await fetchPicklistConfig())).toEqual([
+      "90", "45", "30", "60", "15",
+    ]);
+  });
+
+  test("Sort_Order 9 places Fruit between priority 5 and priority 10", async () => {
+    window.ZOHO = {
+      CRM: {
+        API: {
+          getAllRecords: jest.fn().mockResolvedValue({
+            data: [
+              { Name: "Meeting", Sort_Order: 10 },
+              { Name: "Fruit", Sort_Order: 9 },
+              { Name: "Other", Sort_Order: 5 },
+            ].map((record) => ({ ...record, Category: "Type", Active: true })),
+          }),
+        },
+      },
+    };
+
+    expect(getTypeOptionsFromConfig(await fetchPicklistConfig())).toEqual([
+      "Other", "Fruit", "Meeting",
+    ]);
+  });
+
+  test("unwraps numeric priorities and preserves CRM order for ties and invalid values", async () => {
+    const records = [
+      { Name: "Blank", Sort_Order: "  " },
+      { Name: "Wrapped nine", Sort_Order: { display_value: "9" } },
+      { Name: "Wrapped zero", Sort_Order: { actual_value: 0, display_value: "20" } },
+      { Name: "String zero", Sort_Order: "0" },
+      { Name: "Missing" },
+      { Name: "Invalid", Sort_Order: "not a number" },
+      { Name: "Infinity", Sort_Order: Infinity },
+      { Name: "Boolean", Sort_Order: false },
+      { Name: "Wrapped negative", Sort_Order: { name: "-1" } },
+      { Name: "Wrapped decimal", Sort_Order: { Name: "1.5" } },
+      { Name: "Unrecognized object", Sort_Order: {} },
+    ].map((record) => ({ ...record, Category: "Type", Active: true }));
+    window.ZOHO = {
+      CRM: { API: { getAllRecords: jest.fn().mockResolvedValue({ data: records }) } },
+    };
+
+    expect(getTypeOptionsFromConfig(await fetchPicklistConfig())).toEqual([
+      "Wrapped negative",
+      "Wrapped zero",
+      "String zero",
+      "Wrapped decimal",
+      "Wrapped nine",
+      "Blank",
+      "Missing",
+      "Invalid",
+      "Infinity",
+      "Boolean",
+      "Unrecognized object",
+    ]);
+  });
+
   test("keeps a reached module authoritative when it has no active rows", async () => {
     window.ZOHO = {
       CRM: {

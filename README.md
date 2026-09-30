@@ -2,6 +2,19 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Dynamic picklist order
+
+`Widget_Picklist_Config.Sort_Order` controls the ascending numeric priority of
+Type, Result, Regarding, and Duration options. It is not a numbered slot: if
+Other has priority `5` and Meeting has `10`, Fruit with `9` appears between them,
+even if that is the sixth visible option. Choose priorities relative to the
+surrounding options to place a new value. Zero is valid; blank or invalid
+priorities appear after all numeric priorities. Equal priorities retain CRM
+response order, so use distinct priorities when the relative order matters.
+
+Reload the widget after updating configuration in CRM; the loaded configuration
+is cached for the current widget session.
+
 ## Available Scripts
 
 In the project directory, you can run:

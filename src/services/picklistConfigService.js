@@ -423,6 +423,20 @@ const pushUnique = (list, value) => {
   if (value && !list.includes(value)) list.push(value);
 };
 
+const sortRank = (value) => {
+  const rawValue = value && typeof value === "object"
+    ? value.actual_value ?? value.display_value ?? value.name ?? value.Name
+    : value;
+  if (
+    (typeof rawValue !== "number" && typeof rawValue !== "string") ||
+    (typeof rawValue === "string" && rawValue.trim() === "")
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const numericValue = Number(rawValue);
+  return Number.isFinite(numericValue) ? numericValue : Number.POSITIVE_INFINITY;
+};
+
 const groupRecords = (records) => {
   const { name, category, parentType, sortOrder } = PICKLIST_CONFIG_FIELDS;
   const { TYPE, RESULT, REGARDING, DURATION } = PICKLIST_CATEGORIES;
@@ -432,10 +446,13 @@ const groupRecords = (records) => {
   const regarding = {};
   const durations = [];
 
-  const sorted = [...records].sort(
-    (a, b) =>
-      (Number(a[sortOrder]) || 9999) - (Number(b[sortOrder]) || 9999)
-  );
+  // Sort_Order is an ascending numeric priority. Keep missing/invalid values
+  // after every valid priority, and preserve CRM order when priorities tie.
+  const sorted = [...records].sort((a, b) => {
+    const left = sortRank(a[sortOrder]);
+    const right = sortRank(b[sortOrder]);
+    return left === right ? 0 : left - right;
+  });
 
   for (const record of sorted) {
     const itemCategory = fieldValue(record[category]).trim();
