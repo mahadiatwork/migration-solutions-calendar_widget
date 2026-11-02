@@ -57,6 +57,7 @@ const DrawerComponent = ({
   const [editActivityType, setEditActivityType] = useState([]);
   const [editUser, setEditUser] = useState([]);
   const theme = useTheme();
+  const safeUsers = Array.isArray(users) ? users : [];
 
   useEffect(() => {
     if (editIndex !== null && savedFilters[editIndex]) {
@@ -311,7 +312,7 @@ const DrawerComponent = ({
             input={<OutlinedInput label="Schedule For" />}
             renderValue={(selected) => selected.join(", ")}
           >
-            {users.map((user, index) => (
+            {safeUsers.map((user, index) => (
               <MenuItem key={index} value={user.full_name}>
                 <Checkbox checked={userFilter.includes(user.full_name)} />
                 <ListItemText primary={user.full_name} />
@@ -478,7 +479,7 @@ const DrawerComponent = ({
               input={<OutlinedInput label="Schedule For" />}
               renderValue={(selected) => selected.join(", ")}
             >
-              {users.map((user, idx) => (
+              {safeUsers.map((user, idx) => (
                 <MenuItem key={idx} value={user.full_name}>
                   <Checkbox checked={editUser.includes(user.full_name)} />
                   <ListItemText primary={user.full_name} />

@@ -8,6 +8,7 @@ import {
   saveFiltersToUserPreferences,
 } from "./helpers/userPreferencesFilters";
 import { fetchPicklistConfig } from "./services/picklistConfigService";
+import { getActiveUsersFromResponse } from "./services/zohoUserService";
 import {
   buildCalendarRange,
   getDeviceTimeZone,
@@ -115,19 +116,12 @@ function App() {
         });
       });
 
-      ZOHO.CRM.API.getAllRecords({
-        Entity: "users",
-        sort_order: "asc",
+      ZOHO.CRM.API.getAllUsers({
+        Type: "ActiveUsers",
         per_page: 100,
         page: 1,
       }).then((usersResponse) => {
-        let temp = usersResponse?.users?.filter((user, index) => {
-          return user.status === "active";
-          // if (user.status === "active") {
-          //   setUsers((prev) => [...prev, user]);
-          // }
-        });
-        setUsers(temp);
+        setUsers(getActiveUsersFromResponse(usersResponse));
       });
 
       // Get organization variable
